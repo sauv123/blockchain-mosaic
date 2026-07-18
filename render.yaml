@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: blockchain-mosaic-relay
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: cd relay && npm install
+    startCommand: cd relay && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ETHEREUM_RPC_URL
+        value: https://gateway.tenderly.co/public/mainnet
+      - key: PORT
+        value: 10000
+      - key: WHALE_THRESHOLD_USD
+        value: 50000
+
+  - type: web
+    name: blockchain-mosaic-display
+    env: static
+    region: oregon
+    plan: free
+    buildCommand: cd display && npm install
+    staticPublishPath: display
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: NODE_ENV
+        value: production

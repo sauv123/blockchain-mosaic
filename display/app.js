@@ -1337,14 +1337,17 @@ function drawTile(ctx, x, y, size, block, blockInterval, alpha, theme, isTracked
 // Websocket sync
 function connectRelay() {
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const relayHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? window.location.hostname
-    : 'blockchain-mosaic-production.up.railway.app';
+  const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-  const candidatePorts = [8080, 8086, 8087];
-  const candidateUrls = relayHost === 'blockchain-mosaic-production.up.railway.app'
-    ? [`wss://blockchain-mosaic-production.up.railway.app`]
-    : candidatePorts.map((port) => `${wsProtocol}//${relayHost}:${port}`);
+  let candidateUrls = [];
+  if (isLocalHost) {
+    const candidatePorts = [8080, 8086, 8087, 8088];
+    candidateUrls = candidatePorts.map((port) => `${wsProtocol}//${window.location.hostname}:${port}`);
+  } else if (window.location.hostname.endsWith('.onrender.com')) {
+    candidateUrls = [`wss://blockchain-mosaic-relay.onrender.com`];
+  } else {
+    candidateUrls = [`wss://blockchain-mosaic-production.up.railway.app`];
+  }
 
   let currentIndex = 0;
   let socket = null;
