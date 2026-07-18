@@ -12,9 +12,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '../.env') });
 dotenv.config();
 
-const PORT = process.env.PORT || 8080;
+const DEFAULT_PORT = parseInt(process.env.PORT || '8080', 10);
 const ETHEREUM_RPC_URL = process.env.ETHEREUM_RPC_URL || 'https://cloudflare-eth.com';
 const WHALE_THRESHOLD_USD = parseFloat(process.env.WHALE_THRESHOLD_USD || '50000');
+let PORT = DEFAULT_PORT;
 
 const app = express();
 
@@ -42,32 +43,62 @@ app.get('/api/history/:date', (req, res) => {
   }
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`Relay server HTTP listening on port ${PORT}`);
-});
+function startServer() {
+  return new Promise((resolve, reject) => {
+    const tryListen = (port) => {
+      const server = app.listen(port, () => {
+        PORT = port;
+        console.log(`Relay server HTTP listening on port ${PORT}`);
+        resolve(server);
+      });
 
-// Setup WebSocket Server
-const wss = new WebSocketServer({ server });
+      server.on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+          const nextPort = port + 1;
+          console.warn(`Port ${port} is already in use. Retrying on port ${nextPort}...`);
+          server.close();
+          tryListen(nextPort);
+        } else {
+          reject(err);
+        }
+      });
+    };
 
-wss.on('connection', (ws) => {
-  console.log('Client connected to mosaic relay');
-  
-  // Send existing history immediately
-  try {
-    const history = getHistory(200);
-    ws.send(JSON.stringify({ type: 'history', data: history }));
-  } catch (err) {
-    console.error('Error fetching block history:', err);
-  }
-
-  ws.on('close', () => {
-    console.log('Client disconnected');
+    tryListen(DEFAULT_PORT);
   });
+}
+
+let server;
+let wss;
+
+async function initializeServer() {
+  server = await startServer();
+  wss = new WebSocketServer({ server });
+  wss.on('connection', (ws) => {
+    console.log('Client connected to mosaic relay');
+
+    // Send existing history immediately
+    try {
+      const history = getHistory(200);
+      ws.send(JSON.stringify({ type: 'history', data: history }));
+    } catch (err) {
+      console.error('Error fetching block history:', err);
+    }
+
+    ws.on('close', () => {
+      console.log('Client disconnected');
+    });
+  });
+}
+
+initializeServer().catch((err) => {
+  console.error('Failed to start relay server:', err);
+  process.exit(1);
 });
 
 function broadcast(data) {
   const message = JSON.stringify(data);
-  for (const client of wss.clients) {
+  for (const client of wss?.clients || []) {
     if (client.readyState === 1) { // Open
       client.send(message);
     }

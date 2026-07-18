@@ -1337,17 +1337,112 @@ function drawTile(ctx, x, y, size, block, blockInterval, alpha, theme, isTracked
 // Websocket sync
 function connectRelay() {
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  // If running on local development port 3000/3002, look for port 8086 on localhost.
-  // Otherwise, automatically fallback to using the hosted domain itself for proxying.
-  let wsUrl;
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    wsUrl = `${wsProtocol}//${window.location.hostname}:8086`;
-  } else {
-    // Modify this default production websocket endpoint to match your live deployed railway/render relay server instance:
-    wsUrl = `wss://blockchain-mosaic-production.up.railway.app`;
+  const relayHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? window.location.hostname
+    : 'blockchain-mosaic-production.up.railway.app';
+
+  const candidatePorts = [8080, 8086, 8087];
+  const candidateUrls = relayHost === 'blockchain-mosaic-production.up.railway.app'
+    ? [`wss://blockchain-mosaic-production.up.railway.app`]
+    : candidatePorts.map((port) => `${wsProtocol}//${relayHost}:${port}`);
+
+  let currentIndex = 0;
+  let socket = null;
+
+  function attemptNextConnection() {
+    if (currentIndex >= candidateUrls.length) {
+      setTimeout(connectRelay, 5000);
+      return;
+    }
+
+    const wsUrl = candidateUrls[currentIndex];
+    currentIndex += 1;
+    socket = new WebSocket(wsUrl);
+
+    socket.addEventListener('open', () => {
+      socket.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'history') {
+            const liveBlocks = msg.data.slice(-maxTiles);
+            if (currentMode === 'LIVE' && currentChain === 'ethereum') {
+              blocks = liveBlocks;
+              updateStats();
+            } else {
+              liveBlocksCache = liveBlocks;
+            }
+          } else if (msg.type === 'block') {
+            const newBlock = msg.data;
+            if (currentMode === 'LIVE' && currentChain === 'ethereum') {
+              incomingBlockNum = newBlock.block_number;
+              incomingBlockStartTime = Date.now();
+              blocks.push(newBlock);
+
+              let currentCapacity = cols * rows;
+              if (blocks.length > currentCapacity) {
+                if (tileSize === 64) {
+                  tileSize = 48;
+                  resizeCanvas();
+                } else if (tileSize === 48) {
+                  tileSize = 32;
+                  resizeCanvas();
+                } else if (tileSize === 32) {
+                  tileSize = 24;
+                  resizeCanvas();
+                } else if (tileSize === 24) {
+                  tileSize = 16;
+                  resizeCanvas();
+                } else {
+                  blocks.shift();
+                }
+              }
+              audio.playBlockTones(newBlock);
+              updateStats();
+
+              // Trigger radial ripple wave on incoming new live block
+              if (blocks.length > 0 && typeof gsap !== 'undefined') {
+                const lastIdx = blocks.length - 1;
+                rippleOriginCol = lastIdx % cols;
+                rippleOriginRow = Math.floor(lastIdx / cols);
+                rippleProgress.value = 0;
+
+                gsap.killTweensOf(rippleProgress);
+                gsap.to(rippleProgress, {
+                  value: 1.0,
+                  duration: 1.5,
+                  ease: 'power1.out',
+                  onComplete: () => {
+                    rippleOriginCol = -1;
+                    rippleOriginRow = -1;
+                    rippleProgress.value = 0;
+                  }
+                });
+              }
+            } else {
+              liveBlocksCache.push(newBlock);
+              if (liveBlocksCache.length > maxTiles) {
+                liveBlocksCache.shift();
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Error handling WebSocket message:', err);
+        }
+      };
+
+      socket.onclose = () => {
+        setTimeout(connectRelay, 5000);
+      };
+    });
+
+    socket.addEventListener('error', () => {
+      if (socket.readyState !== WebSocket.OPEN) {
+        attemptNextConnection();
+      }
+    });
   }
 
-  const socket = new WebSocket(wsUrl);
+  attemptNextConnection();
 
   socket.onmessage = (event) => {
     try {
@@ -1419,9 +1514,6 @@ function connectRelay() {
     }
   };
 
-  socket.onclose = () => {
-    setTimeout(connectRelay, 5000);
-  };
 }
 
 // Perform daily trend analysis calculations and update widget UI
