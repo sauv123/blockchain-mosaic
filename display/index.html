@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Blockchain Mosaic — Genesis</title>
+  <meta name="description" content="A real-time generative art installation woven from the block-by-block transactions of the Ethereum network.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;600&family=Space+Mono&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #14140f;
+      --text-color: #e2e2da;
+      --accent-color: #3b6fd4;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --font-sans: 'Outfit', sans-serif;
+      --font-mono: 'Space Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+    }
+
+    /* Ambient noise background texture */
+    .background-noise {
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 0);
+      background-size: 24px 24px;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .ambient-glow {
+      position: fixed;
+      top: -10%;
+      right: -10%;
+      width: 60vw;
+      height: 60vw;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(59, 111, 212, 0.04) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    header {
+      padding: 40px 60px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+    }
+
+    .logo {
+      font-weight: 600;
+      font-size: 0.85rem;
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      color: var(--text-color);
+      text-decoration: none;
+      transition: opacity 0.3s;
+    }
+
+    .logo:hover {
+      opacity: 0.7;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent-color);
+      background: rgba(59, 111, 212, 0.08);
+      border: 1px solid rgba(59, 111, 212, 0.15);
+      padding: 6px 12px;
+      border-radius: 30px;
+    }
+
+    .pulse-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: var(--accent-color);
+      box-shadow: 0 0 8px var(--accent-color);
+      animation: blink 2s infinite ease-in-out;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      padding: 40px 60px;
+      z-index: 10;
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 80px;
+      align-items: center;
+      width: 100%;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .hero-text {
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    h1 {
+      font-size: clamp(2.5rem, 5.5vw, 4.8rem);
+      font-weight: 200;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      color: #ffffff;
+    }
+
+    h1 span {
+      display: block;
+      font-weight: 400;
+      background: linear-gradient(to right, #ffffff 40%, rgba(255, 255, 255, 0.3) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    p.subtitle {
+      font-size: clamp(1rem, 1.8vw, 1.25rem);
+      font-weight: 300;
+      line-height: 1.6;
+      color: rgba(226, 226, 218, 0.7);
+      max-width: 580px;
+    }
+
+    .action-row {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      margin-top: 10px;
+    }
+
+    .enter-btn {
+      display: inline-flex;
+      align-items: center;
+      background-color: var(--text-color);
+      color: var(--bg-color);
+      border: 1px solid var(--text-color);
+      font-family: var(--font-sans);
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      padding: 16px 36px;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background-color 0.3s, color 0.3s, transform 0.2s;
+    }
+
+    .enter-btn:hover {
+      background-color: transparent;
+      color: var(--text-color);
+      transform: translateY(-2px);
+    }
+
+    .enter-btn:active {
+      transform: translateY(0);
+    }
+
+    .enter-btn svg {
+      margin-left: 10px;
+      transition: transform 0.3s;
+    }
+
+    .enter-btn:hover svg {
+      transform: translateX(4px);
+    }
+
+    /* Minimal Artistic Interactive Tapestry Preview Component */
+    .preview-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+
+    .mini-canvas-frame {
+      aspect-ratio: 1;
+      width: 100%;
+      max-width: 380px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.015);
+      padding: 16px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+    }
+
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      width: 100%;
+      height: 100%;
+    }
+
+    .mini-tile {
+      border: 1px solid rgba(255, 255, 255, 0.03);
+      background-color: rgba(255, 255, 255, 0.02);
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+      cursor: crosshair;
+      transition: border-color 0.3s, background-color 0.3s;
+    }
+
+    .mini-tile:hover {
+      border-color: rgba(59, 111, 212, 0.3);
+    }
+
+    .subpixels {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 2px;
+      padding: 4px;
+      height: 100%;
+      width: 100%;
+      opacity: 0.65;
+      transition: opacity 0.3s;
+    }
+
+    .mini-tile:hover .subpixels {
+      opacity: 1;
+    }
+
+    .subpixel {
+      background-color: var(--border-color);
+      border-radius: 1px;
+      opacity: 0.15;
+      transition: background-color 0.5s ease, opacity 0.5s ease;
+    }
+
+    /* Conceptual micro tags */
+    .micro-label {
+      position: absolute;
+      font-family: var(--font-mono);
+      font-size: 0.55rem;
+      letter-spacing: 0.05em;
+      opacity: 0.3;
+      text-transform: uppercase;
+    }
+
+    .micro-label.tl { top: 12px; left: 12px; }
+    .micro-label.br { bottom: 12px; right: 12px; }
+
+    footer {
+      padding: 40px 60px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--border-color);
+      z-index: 10;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.05em;
+      color: rgba(226, 226, 218, 0.4);
+    }
+
+    footer a {
+      color: rgba(226, 226, 218, 0.6);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    footer a:hover {
+      color: var(--text-color);
+    }
+
+    @media (max-width: 768px) {
+      header, main, footer {
+        padding: 30px;
+      }
+
+      .content-grid {
+        grid-template-columns: 1fr;
+        gap: 50px;
+      }
+
+      .preview-container {
+        order: -1;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="background-noise"></div>
+  <div class="ambient-glow"></div>
+
+  <header>
+    <a href="#" class="logo">The Mosaic</a>
+    <div class="status-badge">
+      <div class="pulse-dot"></div>
+      <span>Ethereum Live Stream</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="content-grid">
+      <div class="hero-text">
+        <h1>
+          <span>A Living Portrait</span>
+          of the Blockchain
+        </h1>
+        <p class="subtitle">
+          An avant-garde visual tapestry woven in real time, mapping transactional momentum, network gas fees, and capital velocity into generative color grids and algorithmic resonance.
+        </p>
+        <div class="action-row">
+          <a href="app.html" class="enter-btn">
+            Observe Tapestry
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <div class="preview-container">
+        <div class="mini-canvas-frame">
+          <div class="micro-label tl">0xGENESIS</div>
+          <div class="mini-grid" id="mini-grid">
+            <!-- 16 Tiles generated dynamically -->
+          </div>
+          <div class="micro-label br">REALTIME</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <span>GENESIS PORTRAIT 2026</span>
+    <span>SOUNDS: PROCEDURAL</span>
+  </footer>
+
+  <script>
+    // Minimal aesthetic interactive canvas simulation on landing page
+    const grid = document.getElementById('mini-grid');
+    const colors = [
+      'hsl(220, 75%, 45%)', // Monochrome Electric Blue
+      'hsl(220, 75%, 45%)', 
+      'hsl(220, 75%, 45%)',
+      'rgba(255, 255, 255, 0.95)' // Whale shimmer
+    ];
+
+    for (let i = 0; i < 16; i++) {
+      const tile = document.createElement('div');
+      tile.classList.add('mini-tile');
+
+      const subpixels = document.createElement('div');
+      subpixels.classList.add('subpixels');
+
+      for (let j = 0; j < 16; j++) {
+        const sub = document.createElement('div');
+        sub.classList.add('subpixel');
+        subpixels.appendChild(sub);
+      }
+
+      tile.appendChild(subpixels);
+      grid.appendChild(tile);
+
+      // Random initial lighting
+      simulateActivity(tile);
+    }
+
+    function simulateActivity(tile) {
+      const subs = tile.querySelectorAll('.subpixel');
+      const activeCount = Math.floor(Math.random() * 8) + 2;
+      const isWhale = Math.random() < 0.15;
+      
+      subs.forEach((sub, idx) => {
+        if (Math.random() < (activeCount / 16)) {
+          const color = isWhale && Math.random() < 0.3 ? colors[3] : colors[0];
+          sub.style.backgroundColor = color;
+          sub.style.opacity = Math.random() * 0.7 + 0.3;
+        } else {
+          sub.style.backgroundColor = '';
+          sub.style.opacity = '';
+        }
+      });
+
+      // Loop simulation individually per tile
+      setTimeout(() => {
+        simulateActivity(tile);
+      }, Math.random() * 3000 + 2000);
+    }
+  </script>
+</body>
+</html>

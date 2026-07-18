@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meta Spatial Mosaic</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700&family=Space+Mono&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0a0c;
+      --accent: #00e5ff;
+      --text: #e2e2da;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Outfit', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    #meta-container {
+      text-align: center;
+      max-width: 600px;
+      padding: 20px;
+      z-index: 2;
+    }
+    h1 {
+      font-size: 2.2rem;
+      letter-spacing: 0.1em;
+      margin-bottom: 5px;
+      color: var(--text);
+    }
+    .badge {
+      display: inline-block;
+      padding: 6px 12px;
+      background: rgba(0, 229, 255, 0.1);
+      border: 1px solid var(--accent);
+      border-radius: 20px;
+      font-size: 0.75rem;
+      color: var(--accent);
+      font-family: 'Space Mono', monospace;
+      margin-bottom: 25px;
+    }
+    .meta-btn {
+      background: #ffffff;
+      color: #000000;
+      border: none;
+      padding: 14px 28px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      border-radius: 30px;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(255, 255, 255, 0.15);
+      transition: transform 0.2s, opacity 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .meta-btn:hover {
+      transform: scale(1.03);
+      opacity: 0.9;
+    }
+    #status-feed {
+      margin-top: 30px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.8rem;
+      color: rgba(226, 226, 218, 0.6);
+      height: 60px;
+    }
+    /* Simple Canvas Simulation */
+    #xr-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      opacity: 0.35;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+  <canvas id="xr-canvas"></canvas>
+
+  <div id="meta-container">
+    <h1>META LINK</h1>
+    <div class="badge">Quest WebXR & Ray-Ban Audio Portal</div>
+    
+    <p style="font-size: 0.95rem; line-height: 1.6; margin-bottom: 30px; color: rgba(226, 226, 218, 0.8);">
+      Step into the blockchain. Tap below on your Quest browser to project the mosaic tapestry as a spatial AR panel, or wear Meta Ray-Ban glasses to stream live transaction voice synthesis.
+    </p>
+
+    <button id="xr-entry-btn" class="meta-btn">Enter Immersive Space / Voice</button>
+    
+    <div id="status-feed">Waiting for blockchain stream...</div>
+  </div>
+
+  <script type="module">
+    // Minimal audio & voice synthesis hook for Meta Wearables
+    let ws;
+    const statusFeed = document.getElementById('status-feed');
+    const xrEntryBtn = document.getElementById('xr-entry-btn');
+    let speechEnabled = false;
+
+    // Web Speech API Voice synthesis helper
+    function speak(text) {
+      if (!speechEnabled || !('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.05;
+      utterance.pitch = 0.95;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // Toggle speech audio authorization on button interaction
+    xrEntryBtn.addEventListener('click', () => {
+      speechEnabled = !speechEnabled;
+      if (speechEnabled) {
+        xrEntryBtn.textContent = "Exit Portal / Mute";
+        xrEntryBtn.style.background = "rgba(255, 0, 85, 0.8)";
+        xrEntryBtn.style.color = "#ffffff";
+        statusFeed.textContent = "Audio portal activated. Streaming live updates...";
+        speak("Connected to Meta Spatial Mosaic. Waiting for new block.");
+      } else {
+        xrEntryBtn.textContent = "Enter Immersive Space / Voice";
+        xrEntryBtn.style.background = "#ffffff";
+        xrEntryBtn.style.color = "#000000";
+        statusFeed.textContent = "Portal inactive.";
+      }
+    });
+
+    // Connect to blockchain stream
+    function connectStream() {
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${wsProtocol}//${window.location.hostname}:8085`;
+      ws = new WebSocket(wsUrl);
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'block') {
+            const block = msg.data;
+            const statusMsg = `Block ${block.block_number}: processed ${block.tx_count} transactions. Gas is ${block.base_fee_gwei} Gwei.`;
+            statusFeed.textContent = statusMsg;
+            
+            // Speak description for audio-only glasses
+            if (block.whale_flag === 1) {
+              speak(`Alert. Whale transaction detected in block ${block.block_number}.`);
+            } else {
+              speak(`New block ${block.block_number}. ${block.tx_count} transactions.`);
+            }
+          }
+        } catch(e) {
+          console.warn("WS parsing error:", e);
+        }
+      };
+
+      ws.onclose = () => setTimeout(connectStream, 5000);
+    }
+
+    connectStream();
+
+    // Canvas Background Animation
+    const canvas = document.getElementById('xr-canvas');
+    const ctx = canvas.getContext('2d');
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function draw() {
+      ctx.fillStyle = 'rgba(10, 10, 12, 0.1)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Gentle spatial grid simulation
+      const time = Date.now() * 0.001;
+      const size = 50;
+      for (let x = 0; x < canvas.width; x += size) {
+        for (let y = 0; y < canvas.height; y += size) {
+          const float = Math.sin(time + x * 0.01 + y * 0.01) * 3;
+          ctx.fillStyle = `rgba(0, 229, 255, ${0.05 + Math.sin(time + x) * 0.02})`;
+          ctx.fillRect(x + float, y + float, size - 2, size - 2);
+        }
+      }
+      requestAnimationFrame(draw);
+    }
+    draw();
+  </script>
+</body>
+</html>

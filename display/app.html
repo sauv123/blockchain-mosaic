@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Blockchain Mosaic</title>
+  <meta name="description" content="A living portrait of the Ethereum blockchain, weaving its own tapestry, one block at a time.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&family=Space+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=10">
+  <!-- GSAP CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+</head>
+<body>
+
+  <!-- Background Ambient Glow -->
+  <div class="ambient-glow"></div>
+
+  <!-- Header / Controls Overlay -->
+  <header class="app-header">
+    <div class="brand-group">
+      <div class="brand">
+        <div class="status-indicator live" id="live-indicator"></div>
+        <h1>THE MOSAIC</h1>
+      </div>
+      <div class="sub-brand" id="mode-status-text">A Living Portrait of the Blockchain</div>
+    </div>
+    
+    <!-- Wallet Tracker and Stats Banner -->
+    <div class="header-controls">
+      <div class="tracker-bar">
+        <input type="text" id="track-address-input" placeholder="Track wallet (e.g. 0x71c...)" aria-label="Track Wallet Address">
+        <button id="clear-track-btn" aria-label="Clear tracked wallet">&times;</button>
+      </div>
+      <button id="archive-toggle-btn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: -1px;"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        Settings & Archives
+      </button>
+      <button id="guide-open-btn" class="guide-open-btn" aria-label="How it Works — Guide" title="How it Works (?)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px; vertical-align: -1px;"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Guide
+      </button>
+      <div id="stats-banner" class="stats-banner">
+        <div class="stat-item">
+          <span class="label" id="stats-block-label">LATEST BLOCK</span>
+          <span class="value" id="latest-block-val">—</span>
+        </div>
+        <div class="stat-item">
+          <span class="label">AVG FEE</span>
+          <span class="value" id="avg-fee-val">— Gwei</span>
+        </div>
+        <div class="stat-item">
+          <span class="label" id="stats-fill-label">GRID FILL</span>
+          <span class="value" id="grid-fill-val">0%</span>
+        </div>
+        <div class="stat-item trend-item">
+          <span class="label">DOMINANT TREND</span>
+          <span class="value" id="trend-dominant-val">Analyzing...</span>
+        </div>
+        <div class="stat-item trend-item">
+          <span class="label">GAS TRAJECTORY</span>
+          <span class="value" id="trend-gas-val">—</span>
+        </div>
+        <div class="stat-item ratio-item">
+          <span class="label">TX ACTIVITY SPLIT</span>
+          <div class="ratio-bar" id="trend-ratio-bar">
+            <div class="bar-segment transfers" style="width: 33%" title="Transfers"></div>
+            <div class="bar-segment swaps" style="width: 34%" title="Swaps"></div>
+            <div class="bar-segment mints" style="width: 33%" title="Mints"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Historical Banner Indicator -->
+  <div id="historical-banner" class="historical-banner">
+    <div class="banner-content">
+      <span>Viewing Historical Portrait: <strong id="historical-date-label">July 4, 2026</strong></span>
+      <button id="return-live-btn">Return to Live</button>
+    </div>
+  </div>
+
+  <!-- Interactive Grid Canvas -->
+  <main class="canvas-container" id="canvas-container">
+    <canvas id="mosaic-canvas"></canvas>
+    
+    <!-- Floating Playback Controls (Archives only) -->
+    <div id="playback-controls" class="playback-controls">
+      <button id="playback-play-btn" class="playback-btn">Play</button>
+      <input type="range" id="playback-slider" class="playback-slider" min="0" max="100" value="0" aria-label="Scrub history">
+      <span id="playback-counter" class="playback-counter">0 / 0 Blocks</span>
+    </div>
+  </main>
+
+  <!-- Full-Screen Guide / How it Works Overlay -->
+  <div id="guide-overlay" class="guide-overlay" role="dialog" aria-modal="true" aria-label="How the Mosaic Works">
+    <div class="guide-panel">
+      <div class="guide-panel-header">
+        <div class="guide-panel-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          How the Mosaic Works
+        </div>
+        <button id="guide-close-btn" class="guide-close-btn" aria-label="Close guide">&times;</button>
+      </div>
+
+      <div class="guide-body">
+
+        <!-- PART 1: THE BIG PICTURE -->
+        <section class="guide-section">
+          <div class="guide-section-badge">Step 1</div>
+          <h2 class="guide-section-title">The Big Picture — What is The Mosaic?</h2>
+          <p class="guide-text">The Mosaic is a <strong>living, generative artwork</strong> that turns the Ethereum blockchain into a visual painting — updated in real time, block by block. Think of it as a window into the pulse of the internet's financial layer.</p>
+          <p class="guide-text">Every second, thousands of transactions are happening across the world — people sending money, trading tokens, creating digital art, or using decentralized apps. The Mosaic turns all of that invisible activity into color, shape, and sound, making it something you can actually <em>see</em> and <em>feel</em>.</p>
+          <div class="guide-callout">
+            <span class="guide-callout-icon">💡</span>
+            <span>No coding knowledge needed. If you can read a painting, you can read The Mosaic.</span>
+          </div>
+        </section>
+
+        <!-- PART 2: BLOCKS -->
+        <section class="guide-section">
+          <div class="guide-section-badge">Step 2</div>
+          <h2 class="guide-section-title">Blocks — The Building Squares</h2>
+          <p class="guide-text">On a blockchain like Ethereum, data is organized into <strong>blocks</strong>. Roughly every 12 seconds, a validator bundles up a batch of recent transactions and adds a new block to the chain — like adding a page to a ledger.</p>
+          <div class="guide-visual-row">
+            <div class="guide-visual-item">
+              <div class="guide-tile-demo" style="background: hsl(190,80%,40%); opacity:0.8;"></div>
+              <span>Calm Block<br><small>Few transactions, low fees</small></span>
+            </div>
+            <div class="guide-visual-item">
+              <div class="guide-tile-demo" style="background: hsl(45,85%,48%); opacity:0.95;"></div>
+              <span>Active Block<br><small>Many transactions, moderate fees</small></span>
+            </div>
+            <div class="guide-visual-item">
+              <div class="guide-tile-demo" style="background: hsl(0,0%,95%); box-shadow: 0 0 12px rgba(255,255,255,0.8);"></div>
+              <span>Whale Block<br><small>Massive capital movement detected</small></span>
+            </div>
+          </div>
+          <p class="guide-text">In The Mosaic, <strong>each square tile = one block</strong>. The grid fills from left to right, top to bottom. When the grid is full, it resets and starts again — like a new canvas.</p>
+          <div class="guide-term">
+            <span class="guide-term-label">Block Number</span>
+            <span class="guide-term-def">A sequential ID for each block. Block #21,000,000 comes right after #20,999,999. You can see the latest block number in the header stats.</span>
+          </div>
+          <div class="guide-term">
+            <span class="guide-term-label">Grid Fill %</span>
+            <span class="guide-term-def">How full the current mosaic canvas is. At 100%, a new mosaic cycle begins. Think of it as "how full is this painting?"</span>
+          </div>
+        </section>
+
+        <!-- PART 3: TRANSACTIONS -->
+        <section class="guide-section">
+          <div class="guide-section-badge">Step 3</div>
+          <h2 class="guide-section-title">Transactions — The Brushstrokes Inside Each Tile</h2>
+          <p class="guide-text">Inside each block tile, you'll see smaller colored pixels. <strong>Each pixel represents one transaction</strong> inside that block. The color of each pixel tells you what <em>type</em> of activity it is:</p>
+
+          <div class="guide-tx-grid">
+            <div class="guide-tx-row">
+              <div class="guide-tx-dot" style="background: hsl(190,80%,50%);"></div>
+              <div class="guide-tx-info">
+                <strong>Plain Transfer</strong>
+                <p>The simplest action on the blockchain. Person A sends ETH or tokens directly to Person B. Like a digital wire transfer. No middleman, no bank.</p>
+                <span class="guide-tx-example">Example: Sending 0.5 ETH to a friend's wallet.</span>
+              </div>
+            </div>
+            <div class="guide-tx-row">
+              <div class="guide-tx-dot" style="background: hsl(320,80%,55%);"></div>
+              <div class="guide-tx-info">
+                <strong>DeFi Swap (Token Exchange)</strong>
+                <p>A trade executed on a <em>decentralized exchange</em> (DEX) like Uniswap. Instead of a centralized exchange like Coinbase, the swap happens automatically via a smart contract. No account needed.</p>
+                <span class="guide-tx-example">Example: Swapping USDC for ETH on Uniswap at the current market rate.</span>
+              </div>
+            </div>
+            <div class="guide-tx-row">
+              <div class="guide-tx-dot" style="background: hsl(145,75%,45%);"></div>
+              <div class="guide-tx-info">
+                <strong>NFT Mint</strong>
+                <p>The act of <em>creating</em> a new digital item on the blockchain — like publishing a piece of art, a game item, or a collectible. Once minted, that item has a provable record of creation and ownership.</p>
+                <span class="guide-tx-example">Example: An artist mints 100 editions of a digital painting. Each edition becomes a unique, ownable token.</span>
+              </div>
+            </div>
+            <div class="guide-tx-row">
+              <div class="guide-tx-dot" style="background: hsl(45,85%,50%);"></div>
+              <div class="guide-tx-info">
+                <strong>Contract Call</strong>
+                <p>An interaction with a <em>smart contract</em> — a self-executing piece of code that lives on the blockchain. When you use a DeFi app, vote in a DAO, or claim a reward, you're making a contract call.</p>
+                <span class="guide-tx-example">Example: Claiming staking rewards from a liquidity pool, or voting on a governance proposal.</span>
+              </div>
+            </div>
+            <div class="guide-tx-row">
+              <div class="guide-tx-dot" style="background: #fff; box-shadow: 0 0 8px rgba(255,255,255,0.9);"></div>
+              <div class="guide-tx-info">
+                <strong>Whale Transaction ✦</strong>
+                <p>A transaction involving a very large amount of money (over $50,000 equivalent). These glow bright white and pulse on the mosaic. They also trigger a deep sub-bass tone in the sound engine — you can literally <em>hear</em> the money move.</p>
+                <span class="guide-tx-example">Example: A large fund moving $2M worth of ETH between wallets.</span>
+              </div>
+            </div>
+            <div class="guide-tx-row">
+              <div class="guide-tx-dot" style="background: transparent; border: 2px solid rgba(0,229,255,0.9);"></div>
+              <div class="guide-tx-info">
+                <strong>Staking</strong>
+                <p>Locking up tokens in a smart contract to earn passive rewards — similar to putting money in a savings account that earns interest. Stakers help secure the network or provide liquidity.</p>
+                <span class="guide-tx-example">Example: Depositing ETH into a liquid staking protocol like Lido to earn staking yield.</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- PART 4: SMART CONTRACTS -->
+        <section class="guide-section">
+          <div class="guide-section-badge">Step 4</div>
+          <h2 class="guide-section-title">Smart Contracts — The Rulebooks</h2>
+          <p class="guide-text">A <strong>smart contract</strong> is a program that lives on the blockchain and runs automatically when certain conditions are met. Nobody controls it — not even its creator. Once deployed, it just runs according to its coded rules.</p>
+          <div class="guide-callout">
+            <span class="guide-callout-icon">📜</span>
+            <span><strong>Think of it like a vending machine:</strong> Put in the right input (tokens + instructions), get the exact output (swapped tokens, minted NFT, unlocked reward) — no human needed in the middle.</span>
+          </div>
+          <p class="guide-text">In The Mosaic, most of the colorful, complex activity you see — DeFi swaps, NFT mints, staking — is driven by smart contracts. A plain golden-yellow tile usually indicates a direct contract call.</p>
+        </section>
+
+        <!-- PART 5: GAS & FEES -->
+        <section class="guide-section">
+          <div class="guide-section-badge">Step 5</div>
+          <h2 class="guide-section-title">Gas &amp; Fees — The Cost of Activity</h2>
+          <p class="guide-text">Every transaction on Ethereum requires a small fee paid in <strong>ETH</strong>. This fee compensates the validators who process and confirm the transaction. The fee is measured in <strong>Gwei</strong> — a tiny unit of ETH (1 Gwei = 0.000000001 ETH).</p>
+
+          <div class="guide-term">
+            <span class="guide-term-label">Gas</span>
+            <span class="guide-term-def">A unit that measures computational effort. Simple transfers require less gas; complex contract interactions require more.</span>
+          </div>
+          <div class="guide-term">
+            <span class="guide-term-label">Gas Price (Gwei)</span>
+            <span class="guide-term-def">How much ETH you're willing to pay per unit of gas. Higher gas price = faster confirmation. Lower gas price = cheaper, but may wait longer.</span>
+          </div>
+          <div class="guide-term">
+            <span class="guide-term-label">Average Fee (Avg Fee)</span>
+            <span class="guide-term-def">The mean gas price across all transactions in the latest block, displayed in the header. A low value means the network is calm; a high value means it's congested and busy.</span>
+          </div>
+
+          <div class="guide-visual-row">
+            <div class="guide-fee-card low">
+              <div class="guide-fee-label">Low Fees</div>
+              <div class="guide-fee-gwei">&lt; 10 Gwei</div>
+              <p>Network is quiet. A great time to transact cheaply. Tiles appear as dim, muted versions of their color.</p>
+            </div>
+            <div class="guide-fee-card high">
+              <div class="guide-fee-label">High Fees</div>
+              <div class="guide-fee-gwei">&gt; 50 Gwei</div>
+              <p>Network is congested. More competition for block space. Tiles appear bright and saturated.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- PART 6: TRENDS -->
+        <section class="guide-section">
+          <div class="guide-section-badge">Step 6</div>
+          <h2 class="guide-section-title">Trends — Reading the Pulse</h2>
+          <p class="guide-text">The header stats aren't just numbers — they're a live read of what the network is collectively doing right now.</p>
+
+          <div class="guide-term">
+            <span class="guide-term-label">Dominant Trend</span>
+            <span class="guide-term-def">The most common transaction type across recent blocks. If the mosaic is mostly cyan, "Transfers" will be dominant. If it's mostly magenta, DeFi trading is surging.</span>
+          </div>
+          <div class="guide-term">
+            <span class="guide-term-label">Gas Trajectory</span>
+            <span class="guide-term-def">Is the average fee rising (🔺 Climbing), falling (🔻 Easing), or stable (→ Stable)? This tells you whether network congestion is increasing or decreasing.</span>
+          </div>
+          <div class="guide-term">
+            <span class="guide-term-label">TX Activity Split</span>
+            <span class="guide-term-def">The colored bar in the header showing the ratio of Transfers : DeFi Swaps : NFT Mints. A quick visual snapshot of what people are actually doing right now.</span>
+          </div>
+          <div class="guide-term">
+            <span class="guide-term-label">Stable</span>
+            <span class="guide-term-def">When gas fees or a metric isn't moving much in either direction. A stable gas trajectory means the network load is consistent.</span>
+          </div>
+        </section>
+
+        <!-- PART 7: WALLET TRACKING -->
+        <section class="guide-section">
+          <div class="guide-section-badge">Step 7</div>
+          <h2 class="guide-section-title">Track Wallet — Follow Someone in the Painting</h2>
+          <p class="guide-text">Paste any Ethereum wallet address (starting with 0x...) into the tracker bar. The Mosaic will watch every incoming block and highlight any tile that contains a transaction from or to that wallet.</p>
+          <div class="guide-visual-row">
+            <div class="guide-wallet-item">
+              <div class="guide-wallet-demo sent"></div>
+              <span><strong>Sent</strong><br>Orange glow border — this wallet sent funds</span>
+            </div>
+            <div class="guide-wallet-item">
+              <div class="guide-wallet-demo received"></div>
+              <span><strong>Received</strong><br>Cyan glow border — this wallet received funds</span>
+            </div>
+          </div>
+          <p class="guide-text">This is useful for tracking your own wallet's on-chain activity, watching a known fund, or simply seeing if your favorite address is actively transacting.</p>
+        </section>
+
+        <!-- PART 8: ARCHIVES -->
+        <section class="guide-section">
+          <div class="guide-section-badge">Step 8</div>
+          <h2 class="guide-section-title">Daily Portraits &amp; Archives — History as Art</h2>
+          <p class="guide-text">The Mosaic saves a portrait of each day's blockchain activity. Open <strong>Settings &amp; Archives</strong> and pick a day from the calendar to replay that day's blocks as an animated painting.</p>
+          <div class="guide-term">
+            <span class="guide-term-label">Daily Portrait</span>
+            <span class="guide-term-def">A complete mosaic generated from all blocks on a specific calendar day. Color, complexity, and density all reflect what happened that day on the blockchain.</span>
+          </div>
+          <div class="guide-term">
+            <span class="guide-term-label">Calm / Active / Gas Spike (Mood Dots)</span>
+            <span class="guide-term-def">Color-coded indicators on each calendar day: calm blue = quiet day, amber = active trading, red = heavy congestion and high fees.</span>
+          </div>
+        </section>
+
+        <!-- PART 9: SOUND -->
+        <section class="guide-section">
+          <div class="guide-section-badge">Step 9</div>
+          <h2 class="guide-section-title">Sound Sonification — Hear the Blockchain</h2>
+          <p class="guide-text">The Mosaic can turn every block into a musical note. Each new block triggers a sound based on its hash — a unique fingerprint — and the selected instrument profile. The pitch and tone change with each block.</p>
+          <div class="guide-term">
+            <span class="guide-term-label">Acoustic Guitar</span>
+            <span class="guide-term-def">Uses a Karplus-Strong physical string model — essentially simulating a plucked guitar string in real-time, computed in your browser.</span>
+          </div>
+          <div class="guide-term">
+            <span class="guide-term-label">Electronic Drums (808)</span>
+            <span class="guide-term-def">A classic TR-808 style drum machine: deep sine kick, bandpass snare, crisp hi-hat. Whale blocks trigger earlier in the pattern.</span>
+          </div>
+          <div class="guide-term">
+            <span class="guide-term-label">Synth Pad</span>
+            <span class="guide-term-def">A lush, ambient chord (bass + root + 3rd + 5th) with dual detuned oscillators creating a dreamy chorus effect.</span>
+          </div>
+          <div class="guide-term">
+            <span class="guide-term-label">Warm Chimes</span>
+            <span class="guide-term-def">A bell-like triad with an echo. Whale transactions add a deep resonant sub-bass gong that you can literally feel.</span>
+          </div>
+        </section>
+
+        <!-- PART 10: SHORTCUTS -->
+        <section class="guide-section">
+          <div class="guide-section-badge">Pro Tips</div>
+          <h2 class="guide-section-title">Keyboard Shortcuts &amp; Features</h2>
+          <div class="guide-shortcuts">
+            <div class="guide-shortcut-row">
+              <kbd>F</kbd>
+              <span>Toggle <strong>Focus Mode</strong> — hides all UI for a clean, immersive view of the mosaic. Press F again to return.</span>
+            </div>
+            <div class="guide-shortcut-row">
+              <kbd>Esc</kbd>
+              <span>Exit Focus Mode or close this guide.</span>
+            </div>
+            <div class="guide-shortcut-row">
+              <kbd>?</kbd>
+              <span>Open or close this guide panel.</span>
+            </div>
+            <div class="guide-shortcut-row">
+              <kbd>Hover</kbd>
+              <span>Hover over any tile to see a quick tooltip with block number, tx count, average fee, and mood.</span>
+            </div>
+            <div class="guide-shortcut-row">
+              <kbd>Click</kbd>
+              <span>Click any tile to open the <strong>Details Sidebar</strong> with full block data, transaction flow graph, and a link to verify on Etherscan.</span>
+            </div>
+          </div>
+        </section>
+
+      </div><!-- /guide-body -->
+    </div><!-- /guide-panel -->
+  </div><!-- /guide-overlay -->
+
+
+  <button id="exit-focus-btn" class="exit-focus-btn">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h6v6m10-6h-6v6M4 10h6V4m10 6h-6V4"/></svg>
+    Exit Focus Mode
+    <span class="exit-focus-esc">Esc</span>
+  </button>
+
+
+  <!-- Sliding Settings & Archive Drawer -->
+  <div id="archive-drawer" class="archive-drawer">
+    <div class="drawer-header">
+      <h2>Settings & Archives</h2>
+      <button id="close-drawer-btn" aria-label="Close settings drawer">&times;</button>
+    </div>
+    
+    <!-- Settings Section -->
+    <div class="drawer-settings-section">
+      <h3>Tapestry Settings</h3>
+      <div class="setting-item">
+        <label for="chain-select">Network Source</label>
+        <select id="chain-select" class="chain-select">
+          <option value="ethereum">Ethereum L1</option>
+          <option value="base">Base L2 (Fast)</option>
+          <option value="arbitrum">Arbitrum L2 (Rapid)</option>
+          <option value="solana">Solana (Hyper-Dense)</option>
+        </select>
+      </div>
+      <div class="setting-item">
+        <label for="palette-select">Color Palette</label>
+        <select id="palette-select" class="palette-select">
+          <option value="monochrome" selected>Classic Electric Blue</option>
+          <option value="meadow">Forest Meadow</option>
+          <option value="sunset">Cyberpunk Sunset</option>
+          <option value="spectrum">Multicolor Spectrum</option>
+        </select>
+      </div>
+      <div class="setting-item">
+        <label for="sound-profile-select">Sound Instrument Profile</label>
+        <select id="sound-profile-select" class="sound-profile-select">
+          <option value="chimes">Warm Chimes</option>
+          <option value="guitar">Acoustic Guitar</option>
+          <option value="drums">Electronic Drums (808)</option>
+          <option value="pad">Synth Pad</option>
+        </select>
+      </div>
+      <div class="setting-item">
+        <label for="ambient-profile-select">Background Ambient Loop</label>
+        <select id="ambient-profile-select" class="ambient-profile-select">
+          <option value="hum" selected>Low-Frequency Hum (55Hz)</option>
+          <option value="crackle">Vinyl Crackle &amp; Pop</option>
+          <option value="none">None</option>
+        </select>
+      </div>
+      <div class="setting-buttons-row">
+        <button id="sound-toggle-btn" class="sound-toggle-btn active">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px;vertical-align:-1px"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>Sound: On
+        </button>
+        <button id="art-mode-btn" class="art-mode-btn">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px;vertical-align:-1px"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>Focus Mode
+        </button>
+
+      </div>
+      <div class="setting-buttons-row">
+        <button id="export-svg-btn" class="export-svg-btn" style="flex: 1;">Export SVG</button>
+      </div>
+    </div>
+
+    <!-- Calendar Archive Section -->
+    <div class="calendar-container">
+      <h3>Daily Portraits</h3>
+      <div class="calendar-header">
+        <span class="month-label">July 2026</span>
+      </div>
+      <div class="calendar-grid-labels">
+        <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+      </div>
+      <div class="calendar-grid" id="calendar-days-grid">
+        <!-- Calendar days will be dynamically injected here -->
+      </div>
+    </div>
+
+
+    <div class="drawer-info">
+      <div class="legend-title">Daily Mood Indicators:</div>
+      <div class="legend-grid">
+        <span class="l-item"><span class="l-dot l-calm"></span> Calm Sunday</span>
+        <span class="l-item"><span class="l-dot l-active"></span> Active Trading</span>
+        <span class="l-item"><span class="l-dot l-congested"></span> Gas Spike</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sliding Details Sidebar Drawer -->
+  <div id="details-sidebar" class="details-sidebar">
+    <div class="sidebar-header">
+      <div class="header-main">
+        <span class="block-tag">BLOCK <span id="pop-block-num">#</span></span>
+        <span class="mood-badge" id="pop-mood">Calm</span>
+      </div>
+      <button class="close-sidebar-btn" id="close-sidebar-btn" aria-label="Close sidebar">&times;</button>
+    </div>
+    
+    <div class="sidebar-content">
+      <!-- Tab Selectors -->
+      <div class="tabs-header">
+        <button class="tab-btn active" data-tab="overview">Overview</button>
+        <button class="tab-btn" data-tab="analyst">Flow Graph</button>
+      </div>
+
+      <!-- Tab Panes -->
+      <div class="tab-content">
+        <!-- 1. Overview Pane -->
+        <div class="tab-pane active" id="pane-overview">
+          <div class="main-stats">
+            <div class="main-stat">
+              <span class="label">Amount Moved (USD)</span>
+              <span class="value value-large" id="pop-amount-usd">$0.00</span>
+            </div>
+          </div>
+          <!-- Visual Subpixel Interactive Bar -->
+          <div class="subpixel-inspect-section">
+            <span class="label">Interactive Transactions Map (Click to Inspect)</span>
+            <div id="subpixel-inspect-grid" class="subpixel-inspect-grid">
+              <!-- Grid blocks populated dynamically in app.js -->
+            </div>
+          </div>
+          <div class="details-grid">
+            <div class="detail-cell">
+              <span class="label">Status</span>
+              <span class="value text-success" id="pop-status">Confirmed</span>
+            </div>
+            <div class="detail-cell">
+              <span class="label">Time Confirmed</span>
+              <span class="value" id="pop-time">Just now</span>
+            </div>
+            <div class="detail-cell">
+              <span class="label">Total Fee Paid</span>
+              <span class="value" id="pop-fee-paid">$0.00</span>
+            </div>
+            <div class="detail-cell">
+              <span class="label">Direction</span>
+              <span class="value" id="pop-direction">No tracked wallet</span>
+            </div>
+            <div class="detail-cell">
+              <span class="label">Tx Count</span>
+              <span class="value" id="pop-tx-count">0</span>
+            </div>
+            <div class="detail-cell">
+              <span class="label">Showcase Tx Type</span>
+              <span class="value" id="pop-trader-type">Plain transfer</span>
+            </div>
+            <div class="detail-cell">
+              <span class="label">Showcase Asset</span>
+              <span class="value" id="pop-trader-asset">ETH</span>
+            </div>
+            <div class="detail-cell">
+              <span class="label">Gas Price</span>
+              <span class="value" id="pop-trader-gas">0.00 Gwei</span>
+            </div>
+            <div class="detail-cell full-width">
+              <span class="label">Showcase Tx From (Largest)</span>
+              <span class="value hash-text-short" id="pop-from">0x...</span>
+            </div>
+            <div class="detail-cell full-width">
+              <span class="label">Showcase Tx To (Largest)</span>
+              <span class="value hash-text-short" id="pop-to">0x...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Analyst Pane -->
+        <div class="tab-pane" id="pane-analyst">
+          <!-- Flow Network Diagram -->
+          <div class="graph-wrapper">
+            <span class="label">Transaction Flows (Largest Routes)</span>
+            <canvas id="network-canvas" width="280" height="150"></canvas>
+          </div>
+          <div class="details-grid compact-grid">
+            <div class="detail-cell">
+              <span class="label">Wallet Cluster</span>
+              <span class="value" id="pop-analyst-cluster">Cluster #A12</span>
+            </div>
+            <div class="detail-cell">
+              <span class="label">Address Label</span>
+              <span class="value" id="pop-analyst-label">Smart Contract</span>
+            </div>
+            <div class="detail-cell">
+              <span class="label">Anomaly Flag</span>
+              <span class="value" id="pop-analyst-anomaly">None</span>
+            </div>
+            <div class="detail-cell">
+              <span class="label">First Seen</span>
+              <span class="value" id="pop-analyst-first-seen">34 days ago</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Copy Hash Footer -->
+      <div class="hash-footer">
+        <span class="label">Block Hash</span>
+        <div class="hash-container">
+          <span class="value hash-text" id="pop-hash">0x...</span>
+          <button class="copy-btn" id="pop-copy-hash" aria-label="Copy Block Hash">Copy</button>
+        </div>
+      </div>
+
+      <div class="card-footer">
+        <a id="pop-explorer-link" href="#" target="_blank" rel="noopener noreferrer" class="explorer-link">
+          Verify Receipts
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <footer class="app-footer">
+    <div class="legend" id="legend-container">
+      <span class="legend-item"><span class="color-dot cool"></span> Low Fees</span>
+      <span class="legend-item"><span class="color-dot hot"></span> High Fees</span>
+      <span class="legend-item"><span class="color-dot neon-whale"></span> Whale Transaction</span>
+      <span class="legend-item"><span class="color-dot dot-tracked"></span> Tracked Transaction</span>
+    </div>
+    <div class="guide-text">Hover to inspect. Tap for receipts.</div>
+  </footer>
+
+  <!-- Hover Tooltip -->
+  <div id="hover-tooltip" class="hover-tooltip"></div>
+
+  <!-- Transaction Inspector Overlay Modal -->
+  <div id="tx-inspector-overlay" class="tx-inspector-overlay">
+    <div class="tx-inspector-content">
+      <div class="tx-inspector-header">
+        <span class="tx-inspector-title">Transaction Inspector</span>
+        <button id="close-tx-inspector" class="close-tx-inspector">&times;</button>
+      </div>
+      <div class="tx-inspector-body">
+        <div class="tx-stat-row">
+          <span class="tx-stat-label">Value (USD)</span>
+          <span class="tx-stat-value val-emphasis" id="tx-inspect-value-usd">$0.00</span>
+        </div>
+        <div class="tx-details-grid">
+          <div class="tx-detail-cell">
+            <span class="tx-stat-label">Asset Amount</span>
+            <span class="tx-stat-value" id="tx-inspect-amount">0.00 ETH</span>
+          </div>
+          <div class="tx-detail-cell">
+            <span class="tx-stat-label">Action Type</span>
+            <span class="tx-stat-value" id="tx-inspect-type">Transfer</span>
+          </div>
+          <div class="tx-detail-cell">
+            <span class="tx-stat-label">Gas Fee Rate</span>
+            <span class="tx-stat-value" id="tx-inspect-gas">0.0 Gwei</span>
+          </div>
+          <div class="tx-detail-cell">
+            <span class="tx-stat-label">Target Protocol</span>
+            <span class="tx-stat-value" id="tx-inspect-protocol">Base System</span>
+          </div>
+          <div class="tx-detail-cell full-width">
+            <span class="tx-stat-label">Sender Address</span>
+            <span class="tx-stat-value hash-value" id="tx-inspect-from">0x...</span>
+          </div>
+          <div class="tx-detail-cell full-width">
+            <span class="tx-stat-label">Receiver Address</span>
+            <span class="tx-stat-value hash-value" id="tx-inspect-to">0x...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <script src="app.js?v=10" type="module"></script>
+</body>
+</html>
