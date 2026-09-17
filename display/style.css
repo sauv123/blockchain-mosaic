@@ -2588,3 +2588,45 @@ button {
   transition: opacity 0.2s ease !important;
 }
 
+
+
+/* ============================================================
+   PREMIUM FOCUS MODE UPGRADES
+   ============================================================ */
+
+/* Hide weather line in focus mode */
+body.focus-mode #cinematic-weather-line {
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* Immersive Vignette Overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at center, transparent 30%, rgba(0,0,0,0.8) 120%);
+  opacity: 0;
+  z-index: 100;
+  transition: opacity 1.5s ease-in-out;
+}
+body.focus-mode::after {
+  opacity: 1;
+}
+
+/* Base Canvas for 3D Tilt */
+.canvas-container {
+  perspective: 1200px;
+}
+#mosaic-canvas {
+  transform-style: preserve-3d;
+  transition: transform 0.1s linear, filter 0.5s ease;
+  will-change: transform;
+}
+
+/* Subtle canvas shadow in focus mode */
+body.focus-mode #mosaic-canvas {
+  filter: drop-shadow(0 20px 60px rgba(0,0,0,0.6));
+}
+

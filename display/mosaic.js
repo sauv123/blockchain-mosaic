@@ -25,6 +25,32 @@ const DISMISS_TIMEOUT = 25000;
 let trackedAddress = '';
 
 // Artsy Canvas focus floating & radial wave simulation state
+// Mouse tracking for parallax
+let mouseX = 0;
+let mouseY = 0;
+let targetTiltX = 0;
+let targetTiltY = 0;
+let currentTiltX = 0;
+let currentTiltY = 0;
+
+window.addEventListener('mousemove', (e) => {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+  
+  if (document.body.classList.contains('focus-mode')) {
+    // Calculate tilt angles based on mouse position relative to center
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+    
+    // Max tilt of 6 degrees for subtle 3D effect
+    targetTiltY = ((mouseX - centerX) / centerX) * 6;
+    targetTiltX = -((mouseY - centerY) / centerY) * 6;
+  } else {
+    targetTiltX = 0;
+    targetTiltY = 0;
+  }
+});
+
 let focusFloatProgress = { value: 0 };
 let rippleOriginCol = -1;
 let rippleOriginRow = -1;
@@ -1223,6 +1249,17 @@ function draw(timestamp) {
 
   const theme = THEMES[currentTheme];
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Smooth interpolate canvas tilt for Focus Mode
+  if (currentMode !== 'ART_SYNTHESIS') {
+    currentTiltX += (targetTiltX - currentTiltX) * 0.05;
+    currentTiltY += (targetTiltY - currentTiltY) * 0.05;
+    if (Math.abs(currentTiltX) > 0.01 || Math.abs(currentTiltY) > 0.01) {
+      canvas.style.transform = `rotateX(${currentTiltX.toFixed(2)}deg) rotateY(${currentTiltY.toFixed(2)}deg) translateZ(0)`;
+    } else if (canvas.style.transform) {
+      canvas.style.transform = '';
+    }
+  }
 
   if (blocks.length === 0 && currentMode === 'LIVE') {
     ctx.fillStyle = theme.tileBg;
