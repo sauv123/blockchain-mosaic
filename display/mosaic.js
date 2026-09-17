@@ -545,6 +545,17 @@ let playbackIntervalId = null;
 let isPlayingPlayback = false;
 
 // Audio toggling
+// Also wire the header audio icon button
+const audioIconBtn = document.getElementById('audio-toggle-btn');
+if (audioIconBtn) {
+  audioIconBtn.addEventListener('click', () => {
+    audio.init();
+    const isMuted = audio.toggle();
+    audioIconBtn.style.opacity = isMuted ? '0.35' : '1';
+    audioIconBtn.title = isMuted ? 'Enable Audio' : 'Mute Audio';
+  });
+}
+
 if (soundToggleBtn) {
   soundToggleBtn.addEventListener('click', () => {
     const isMuted = audio.toggle();
@@ -668,12 +679,60 @@ function updateLegend() {
   }
 }
 
+// Inject a Theme (Light/Dark) selector into the settings drawer
+(function() {
+  const paletteItem = document.querySelector('#palette-select')?.closest('.setting-item');
+  if (paletteItem && !document.getElementById('theme-select')) {
+    const themeItem = document.createElement('div');
+    themeItem.className = 'setting-item';
+    themeItem.innerHTML = `
+      <label for="theme-select" style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; font-family:'Space Mono',monospace; opacity:0.6;">Theme</label>
+      <select id="theme-select">
+        <option value="warmGray">Warm Gray (Light)</option>
+        <option value="charcoal">Charcoal (Dark)</option>
+      </select>
+    `;
+    paletteItem.insertAdjacentElement('afterend', themeItem);
+
+    const themeSelect = document.getElementById('theme-select');
+    themeSelect.value = currentTheme;
+    themeSelect.addEventListener('change', (e) => {
+      currentTheme = e.target.value;
+      lastInteractionTime = Date.now();
+      applyAllSettings();
+    });
+  }
+})();
+
+// Single source of truth: applyAllSettings()
+function applyAllSettings() {
+  // 1. Body class drives all CSS variable theming
+  document.body.className = currentTheme + '-theme';
+  applyThemeStyles();
+
+  // 2. Palette: reset any portrait filter so colors render fresh
+  const canvas = document.getElementById('mosaic-canvas');
+  if (canvas && currentMode !== 'ART_SYNTHESIS') {
+    canvas.style.filter = '';
+  }
+
+  // 3. Legend and ratio bar
+  updateRatioBarColors();
+
+  // 4. Update URL so sharing works
+  updateUrlParameters();
+}
+
 // Palette Change listener
 if (paletteSelect) {
   paletteSelect.addEventListener('change', (e) => {
     currentPalette = e.target.value;
     lastInteractionTime = Date.now();
-    updateRatioBarColors();
+    // If portrait filter is active, remove it so new palette colors show correctly
+    if (currentMode === 'ART_SYNTHESIS') {
+      if (typeof exitPortrait === 'function') exitPortrait();
+    }
+    applyAllSettings();
   });
 }
 
@@ -681,16 +740,14 @@ if (paletteSelect) {
 themeToggleBtn = null;
 
 function applyThemeStyles() {
-  const theme = THEMES[currentTheme];
-  document.body.style.backgroundColor = theme.bg;
-  document.body.style.color = theme.text;
-  
-  document.querySelectorAll('.stat-item .value').forEach(el => {
-    if (el.id !== 'trend-gas-val') {
-      el.style.color = theme.text;
-    }
+  // CSS custom properties do all the work — just set the class.
+  // Clear any lingering inline styles that may have overridden CSS vars.
+  document.body.style.removeProperty('background-color');
+  document.body.style.removeProperty('color');
+  document.querySelectorAll('.stat-item .value, .brand h1, .brand .sub-brand').forEach(el => {
+    el.style.removeProperty('color');
   });
-  document.querySelector('.brand h1').style.color = theme.text;
+  // Body class is set by caller — this function just cleans up inline overrides.
 }
 
 // Tab handlers (Overhauled for Overview & Flow Graph only)
@@ -1158,8 +1215,6 @@ function resizeCanvas() {
 
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
-document.body.className = currentTheme + '-theme';
-applyThemeStyles();
 
 // Draw Loop
 function draw(timestamp) {
@@ -2423,14 +2478,21 @@ function parseUrlParameters() {
   
   // 2. Theme Router
   const theme = params.get('theme');
+
   if (theme && THEMES[theme]) {
     currentTheme = theme;
+
     document.body.className = theme + '-theme';
     if (themeToggleBtn) {
       themeToggleBtn.textContent = theme === 'warmGray' ? 'Toggle Charcoal Theme' : 'Toggle Warm Gray Theme';
     }
+    const ts = document.getElementById('theme-select');
+    if (ts) ts.value = currentTheme;
   }
   
+  // Apply all settings after URL params are loaded
+  applyAllSettings();
+
   // 3. Chain Router
   const chain = params.get('chain');
   if (chain && ['ethereum', 'base', 'arbitrum', 'solana'].includes(chain)) {

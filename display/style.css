@@ -2549,3 +2549,42 @@ body.light-theme select:hover { background-color: rgba(0,0,0,0.06) !important; }
 .toggle-theme-btn, button[onclick*="toggle"] {
   display: none !important;
 }
+
+/* ============================================================
+   THEME CONSISTENCY — ensure CSS vars override any inline styles
+   ============================================================ */
+
+/* Force all theme-affected elements to use CSS vars */
+.app-header,
+.brand h1,
+.brand .sub-brand,
+.stat-item,
+.stat-item .value,
+.stat-item .label,
+.app-footer,
+.details-sidebar,
+.archive-drawer,
+.drawer-header h2,
+.setting-item label,
+.playback-controls,
+.playback-btn,
+select,
+button {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease !important;
+}
+
+/* Ensure the canvas container background also transitions */
+.canvas-container {
+  transition: background-color 0.3s ease !important;
+}
+
+/* Theme select in settings — same style as other dropdowns */
+#theme-select {
+  width: 100%;
+}
+
+/* Audio toggle btn in header */
+#audio-toggle-btn {
+  transition: opacity 0.2s ease !important;
+}
+
