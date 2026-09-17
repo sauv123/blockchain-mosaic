@@ -447,7 +447,7 @@ body.charcoal-theme .calendar-day {
 
 .calendar-day.empty-day {
   cursor: default;
-  opacity: 0.15;
+  opacity: 0.8;
   border-style: dashed;
 }
 
@@ -2241,3 +2241,88 @@ body.focus-mode .guide-overlay {
 }
 
 
+
+
+/* MASSIVE DASHBOARD STATS */
+.massive-stats-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5; /* Below the canvas interactions but visible */
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  width: 100%;
+  opacity: 0.8; /* Subtle background presence */
+  /* mix-blend-mode: overlay; */
+  transition: opacity 0.5s ease;
+}
+
+.canvas-container:hover .massive-stats-overlay {
+  opacity: 0.2; /* Fade out slightly when inspecting */
+}
+
+.giant-stat-group {
+  text-align: center;
+}
+
+.giant-val {
+  font-family: 'Space Mono', monospace;
+  font-size: clamp(3rem, 7vw, 7rem);
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  display: block;
+}
+
+.giant-label {
+  font-family: 'Outfit', sans-serif;
+  font-size: clamp(1rem, 1.5vw, 1.5rem);
+  color: #ffffff;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  margin-top: 10px;
+  display: block;
+  font-weight: 300;
+}
+
+/* Ensure legend is completely visible */
+.app-footer {
+  z-index: 9999 !important;
+  position: relative !important;
+}
+.legend {
+  z-index: 9999 !important;
+}
+
+
+/* FORCE FOOTER TO BOTTOM VISIBILITY */
+body {
+  overflow: hidden; /* Prevent scroll so footer isn't lost */
+}
+
+.app-footer {
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 99999 !important;
+  background: rgba(0, 0, 0, 0.2); /* Slight contrast to ensure it pops */
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 12px 30px !important;
+  display: flex !important;
+  justify-content: space-between !important;
+}
+
+.canvas-container {
+  height: calc(100vh - 180px) !important; /* Make room for header and footer explicitly */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
