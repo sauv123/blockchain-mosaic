@@ -528,8 +528,11 @@ const playbackPlayBtn = document.getElementById('playback-play-btn');
   if (genPortraitBtn) {
     genPortraitBtn.addEventListener('click', () => {
       // Pass ALL the blocks loaded for this day (complete picture)
-      const dayData = playbackFullList && playbackFullList.length > 0 ? playbackFullList : blocks;
-      triggerArtisticSynthesis(historicalDayNumber, dayData);
+      // Always synthesize the COMPLETE day, not just what's been scrubbed
+      const fullDayData = playbackFullList && playbackFullList.length > 0 ? playbackFullList : blocks;
+      // Temporarily show all blocks so portrait matches full day
+      blocks = [...fullDayData];
+      triggerArtisticSynthesis(historicalDayNumber, fullDayData);
     });
   }
 const playbackSlider = document.getElementById('playback-slider');
@@ -1161,47 +1164,7 @@ applyThemeStyles();
 // Draw Loop
 function draw(timestamp) {
 
-  if (currentMode === 'ART_SYNTHESIS') {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.save();
-    // Artistic melt: bleed each block so colors blend at borders
-    ctx.filter = 'saturate(220%) blur(5px) contrast(140%)';
-    for (let index = 0; index < blocks.length; index++) {
-      const block = blocks[index];
-      const col = index % cols;
-      const row = Math.floor(index / cols);
-      const x = col * tileSize;
-      const y = row * tileSize;
-      const txs = getBlockTransactions(block);
-      if (!txs || txs.length === 0) continue;
-      // Dominant tx type color for this block
-      const typeCount = {};
-      txs.forEach(t => { typeCount[t.type] = (typeCount[t.type]||0)+1; });
-      const dominantTx = Object.keys(typeCount).reduce((a,b)=>typeCount[a]>typeCount[b]?a:b);
-      const color = PALETTES[currentPalette][dominantTx] || PALETTES[currentPalette]['default'];
-      ctx.fillStyle = color;
-      // Draw with generous overlap so blur fuses the borders
-      ctx.fillRect(x - 4, y - 4, tileSize + 8, tileSize + 8);
-    }
-    ctx.restore();
-    
-    // Luxurious vignette frame
-    ctx.save();
-    const vig = ctx.createRadialGradient(canvas.width/2, canvas.height/2, canvas.width * 0.3, canvas.width/2, canvas.height/2, canvas.width * 0.8);
-    vig.addColorStop(0, 'rgba(0,0,0,0)');
-    vig.addColorStop(1, 'rgba(0,0,0,0.4)');
-    ctx.fillStyle = vig;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
-
-    // GSAP_BOOT_DONE
-  if (typeof gsap !== 'undefined') {
-    gsap.from('.stat-item', { opacity: 0, y: -8, duration: 0.6, stagger: 0.08, ease: 'power2.out', delay: 0.3 });
-    gsap.from('.legend-item', { opacity: 0, y: 6, duration: 0.5, stagger: 0.05, ease: 'power2.out', delay: 0.5 });
-  }
-  requestAnimationFrame(draw);
-    return; // Skip normal grid drawing
-  }
+  // ART_SYNTHESIS: canvas filter applied via CSS — no separate draw path needed
 
   const theme = THEMES[currentTheme];
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -2303,6 +2266,34 @@ async function loadHistoricalPortrait(dateStr, dayNum) {
   liveIndicator.className = 'status-indicator historical-mode';
   modeStatusText.textContent = `Viewing Archives: ${categoryLabel}`;
   
+  // Inject a floating context card explaining what the user is seeing
+  let contextCard = document.getElementById('historical-context-card');
+  if (!contextCard) {
+    contextCard = document.createElement('div');
+    contextCard.id = 'historical-context-card';
+    Object.assign(contextCard.style, {
+      position: 'absolute', top: '16px', left: '50%', transform: 'translateX(-50%)',
+      zIndex: '6000', background: 'rgba(10,12,16,0.88)', backdropFilter: 'blur(16px)',
+      border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px',
+      padding: '12px 20px', textAlign: 'center', pointerEvents: 'none', opacity: '0',
+      fontFamily: "'Outfit', sans-serif", color: 'rgba(255,255,255,0.85)',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.4)', maxWidth: '520px', lineHeight: '1.5'
+    });
+    document.querySelector('.canvas-container').appendChild(contextCard);
+  }
+
+  const dateLabel = formattedFriendlyDate;
+  contextCard.innerHTML = `
+    <span style="font-family:'Space Mono',monospace; font-size:9px; letter-spacing:0.2em; text-transform:uppercase; opacity:0.5; display:block; margin-bottom:4px;">Archive</span>
+    <span style="font-size:14px; font-weight:500;">${dateLabel} — ${categoryLabel}</span>
+    <span style="display:block; font-size:12px; font-weight:300; opacity:0.65; margin-top:4px;">Each square = one block (~12s of time). Colors = transaction types. <strong style="color:#00ff88; font-weight:500;">View Portrait</strong> melts the grid into art.</span>
+  `;
+  contextCard.style.display = 'block';
+  if (typeof gsap !== 'undefined') {
+    gsap.fromTo(contextCard, { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out' });
+    gsap.to(contextCard, { opacity: 0, y: -10, duration: 0.5, delay: 7, ease: 'power2.in', onComplete: () => { contextCard.style.display = 'none'; } });
+  }
+  
   statsBlockLabel.textContent = 'PORTRAIT DATE';
   statsFillLabel.textContent = 'BLOCKS MINED';
   
@@ -2359,8 +2350,14 @@ function switchToLive() {
   archiveDrawer.classList.remove('open');
   pausePlayback();
   playbackControls.classList.remove('active');
+
+  // Reset canvas filter in case portrait mode was active
+  const mosaicCanvas = document.getElementById('mosaic-canvas');
+  if (mosaicCanvas) gsap.to(mosaicCanvas, { filter: 'saturate(100%) contrast(100%) brightness(1) blur(0px)', duration: 0.5 });
+  const artOv = document.getElementById('art-synthesis-overlay');
+  if (artOv) { artOv.style.display = 'none'; }
   
-  if (currentMode === 'HISTORICAL') {
+  if (currentMode === 'HISTORICAL' || currentMode === 'ART_SYNTHESIS') {
     currentMode = 'LIVE';
     
     tileSize = 64;
@@ -2375,6 +2372,8 @@ function switchToLive() {
     
     historicalBanner.classList.remove('active');
     updateStats();
+    const ctxCard = document.getElementById('historical-context-card');
+    if (ctxCard) ctxCard.style.display = 'none';
   }
 
   document.querySelectorAll('.calendar-day').forEach(el => {
