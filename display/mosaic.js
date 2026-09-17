@@ -647,9 +647,9 @@ function updateLegend() {
     `;
   } else {
     legendContainer.innerHTML = `
-      <span class="legend-item"><span class="color-dot" style="background-color: ${palette['Plain Transfer']};"></span> Transfers</span>
-      <span class="legend-item"><span class="color-dot" style="background-color: ${palette['Token Swap']};"></span> DeFi Swaps</span>
-      <span class="legend-item"><span class="color-dot" style="background-color: ${palette['NFT Mint']};"></span> NFT Mints</span>
+      <span class="legend-item"><span class="color-dot" style="background-color: ${palette['Plain Transfer']};"></span> Direct Payments</span>
+      <span class="legend-item"><span class="color-dot" style="background-color: ${palette['Token Swap']};"></span> Trading Coins</span>
+      <span class="legend-item"><span class="color-dot" style="background-color: ${palette['NFT Mint']};"></span> Digital Art</span>
       <span class="legend-item"><span class="color-dot" style="background-color: #ffffff; box-shadow: 0 0 6px #ffffff;"></span> Whale Transaction</span>
       <span class="legend-item"><span class="color-dot" style="background-color: transparent; border: 2px solid rgba(0, 229, 255, 0.85);"></span> Tracked Wallet</span>
     `;
@@ -1259,17 +1259,9 @@ function draw(timestamp) {
       const size = tileSize - gutter;
       
       ctx.save();
-      // Block level glow
-      ctx.globalCompositeOperation = 'screen';
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-      ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
-      ctx.shadowBlur = 20;
-      ctx.fillRect(x, y, size, size);
-      
-      // Crisp outer border
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-      ctx.lineWidth = 1;
-      ctx.shadowBlur = 0;
+      // Crisp outer border only
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.lineWidth = 1.5;
       ctx.strokeRect(x, y, size, size);
       ctx.restore();
     }
@@ -1348,17 +1340,29 @@ function drawTile(ctx, x, y, size, block, blockInterval, alpha, theme, isTracked
       if (isDimmed) {
         ctx.fillStyle = 'rgba(255,255,255,0.02)';
         ctx.shadowBlur = 0;
+        ctx.fillRect(x + cell.col * subSize + 0.5, y + cell.row * subSize + 0.5, subSize - 1, subSize - 1);
       } else {
-        ctx.fillStyle = baseColor.replace(')', `, ${finalOpacity})`).replace('hsl', 'hsla');
+        const parsedColor = baseColor.replace(')', `, ${finalOpacity})`).replace('hsl', 'hsla');
+        
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.shadowBlur = 0;
+        ctx.fillRect(x + cell.col * subSize + 1.5, y + cell.row * subSize + 1.5, subSize - 1, subSize - 1);
+
+        ctx.fillStyle = parsedColor;
         if (isBlockHovered || isFilteredMatch) {
           ctx.shadowColor = baseColor;
-          ctx.shadowBlur = 12;
+          ctx.shadowBlur = 16;
+          ctx.fillRect(x + cell.col * subSize + 0.5, y + cell.row * subSize + 0.5, subSize - 1, subSize - 1);
+          ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+          ctx.lineWidth = 0.5;
+          ctx.strokeRect(x + cell.col * subSize + 0.5, y + cell.row * subSize + 0.5, subSize - 1, subSize - 1);
         } else {
-          ctx.shadowBlur = 0;
+          ctx.shadowBlur = 2;
+          ctx.shadowColor = baseColor;
+          ctx.fillRect(x + cell.col * subSize + 0.5, y + cell.row * subSize + 0.5, subSize - 1, subSize - 1);
         }
       }
     }
-    ctx.fillRect(x + cell.col * subSize + 0.5, y + cell.row * subSize + 0.5, subSize - 1, subSize - 1);
     ctx.shadowBlur = 0;
   });
 
@@ -1727,12 +1731,21 @@ function updateTooltip(block, e) {
   const feeUnit = currentChain === 'solana' ? 'SOL' : 'Gwei';
 
   hoverTooltip.innerHTML = `
-    <div style="font-family: 'Outfit', sans-serif; font-size: 13px; line-height: 1.5; color: rgba(255,255,255,0.9); padding: 4px;">
-      This block was mostly filled with <strong>${block.contract_ratio > 0.6 ? 'Trading Coins' : 'Direct Payments'}</strong>. 
-      <br><br>
-      Network traffic was <strong>${block.base_fee_gwei > 50 ? 'Congested and Expensive' : 'Quiet and Cheap'}</strong>, costing people around <strong>${block.base_fee_gwei.toFixed(0)} Gwei</strong>.
-      <br><br>
-      <span style="color: #00ff88;">${block.tx_count} Total Actions</span> • <span style="color: rgba(255,255,255,0.5);">$${totalBlockUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })} Moved</span>
+    <div class="tooltip-header" style="display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px;">
+      <span class="block-num" style="font-size: 11px; letter-spacing: 0.1em;">Block #${block.block_number}</span>
+      <span class="mood-badge" style="font-size: 9px; padding: 2px 6px; border-radius: 4px; font-weight:600; background:rgba(0,0,0,0.1);">${block.contract_ratio > 0.6 ? 'Trading Dominant' : 'Payments Dominant'}</span>
+    </div>
+    <div class="tooltip-row" style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+      <span class="label" style="font-size: 9px; color: rgba(255,255,255,0.4); text-transform: uppercase;">Total Actions</span>
+      <span class="value" style="font-size: 12px; font-weight: 600;">${block.tx_count}</span>
+    </div>
+    <div class="tooltip-row" style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+      <span class="label" style="font-size: 9px; color: rgba(255,255,255,0.4); text-transform: uppercase;">Amount Moved</span>
+      <span class="value" style="font-size: 12px; font-weight: 600;">$${totalBlockUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+    </div>
+    <div class="tooltip-row" style="display: flex; justify-content: space-between;">
+      <span class="label" style="font-size: 9px; color: rgba(255,255,255,0.4); text-transform: uppercase;">Network Cost</span>
+      <span class="value" style="font-size: 12px; font-weight: 600; color: ${block.base_fee_gwei > 50 ? '#ff4444' : '#00ff88'}">${block.base_fee_gwei.toFixed(1)} Gwei</span>
     </div>
   `;
 
