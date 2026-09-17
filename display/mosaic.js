@@ -972,7 +972,7 @@ function generateSimulatedBlock() {
   
   incomingBlockNum = blockNum;
   incomingBlockStartTime = Date.now();
-  blocks.push(newBlock);
+  blocks.push(newBlock); if (typeof audio !== 'undefined' && currentMode !== 'ART_SYNTHESIS') audio.playBlockTones(newBlock);
   
   let currentCapacity = cols * rows;
   if (blocks.length > currentCapacity) {
@@ -1163,6 +1163,58 @@ applyThemeStyles();
 
 // Draw Loop
 function draw(timestamp) {
+
+  if (currentMode === 'ART_SYNTHESIS') {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingEnabled = true;
+    
+    const totalTransactions = blocks.reduce((sum, b) => sum + getBlockTransactions(b).length, 0);
+    if (totalTransactions === 0) {
+       requestAnimationFrame(draw);
+       return;
+    }
+    
+    const aspect = canvas.width / canvas.height;
+    const rows = Math.ceil(Math.sqrt(totalTransactions / aspect));
+    const cols = Math.ceil(totalTransactions / rows);
+    
+    const cellW = canvas.width / cols;
+    const cellH = canvas.height / rows;
+    
+    let i = 0;
+    
+    ctx.save();
+    ctx.filter = 'saturate(200%) blur(4px) contrast(150%) brightness(0.9)';
+    
+    blocks.forEach(block => {
+      const txs = getBlockTransactions(block);
+      txs.forEach(tx => {
+        const c = i % cols;
+        const r = Math.floor(i / cols);
+        
+        const x = c * cellW;
+        const y = r * cellH;
+        
+        let baseColor = PALETTES[currentPalette][tx.type] || PALETTES[currentPalette]['default'];
+        
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(x - 4, y - 4, cellW + 8, cellH + 8); // generous overlap to bleed
+        
+        i++;
+      });
+    });
+    
+    ctx.restore();
+    
+    // Draw a luxurious overlay frame
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 40;
+    ctx.strokeRect(20, 20, canvas.width - 40, canvas.height - 40);
+    
+    requestAnimationFrame(draw);
+    return; // Skip normal grid drawing
+  }
+
   const theme = THEMES[currentTheme];
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -1436,7 +1488,7 @@ function connectRelay() {
             if (currentMode === 'LIVE' && currentChain === 'ethereum') {
               incomingBlockNum = newBlock.block_number;
               incomingBlockStartTime = Date.now();
-              blocks.push(newBlock);
+              blocks.push(newBlock); if (typeof audio !== 'undefined' && currentMode !== 'ART_SYNTHESIS') audio.playBlockTones(newBlock);
 
               let currentCapacity = cols * rows;
               if (blocks.length > currentCapacity) {
@@ -1520,7 +1572,7 @@ function connectRelay() {
         if (currentMode === 'LIVE' && currentChain === 'ethereum') {
           incomingBlockNum = newBlock.block_number;
           incomingBlockStartTime = Date.now();
-          blocks.push(newBlock);
+          blocks.push(newBlock); if (typeof audio !== 'undefined' && currentMode !== 'ART_SYNTHESIS') audio.playBlockTones(newBlock);
           
           let currentCapacity = cols * rows;
           if (blocks.length > currentCapacity) {
@@ -2155,6 +2207,23 @@ function pausePlayback() {
 
 // Slider scrub listener
 playbackSlider.addEventListener('input', (e) => {
+
+    // Parallax Time-Scrubbing Effect
+    const canvasContainer = document.getElementById('canvas-container');
+    if (canvasContainer) {
+      canvasContainer.style.transition = 'transform 0.1s ease-out, filter 0.1s ease-out';
+      // Slight 3D scale and tilt backwards as you drag to simulate moving fast
+      canvasContainer.style.transform = 'perspective(1000px) rotateX(2deg) scale(0.95) translateZ(-50px)';
+      canvasContainer.style.filter = 'blur(1px)';
+      
+      // Reset after dragging stops
+      clearTimeout(window.parallaxScrubTimer);
+      window.parallaxScrubTimer = setTimeout(() => {
+        canvasContainer.style.transform = 'perspective(1000px) rotateX(0deg) scale(1) translateZ(0)';
+        canvasContainer.style.filter = 'blur(0)';
+      }, 150);
+    }
+
   pausePlayback();
   playbackIndex = parseInt(e.target.value);
   blocks = playbackFullList.slice(0, playbackIndex);
@@ -2176,6 +2245,10 @@ playbackPlayBtn.addEventListener('click', () => {
 
 // Transition Layouts
 async function loadHistoricalPortrait(dateStr, dayNum) {
+  // HIJACKED FOR ART SYNTHESIS
+  triggerArtisticSynthesis(dayNum);
+  return;
+
   lastInteractionTime = Date.now();
   archiveDrawer.classList.remove('open');
   pausePlayback();
@@ -2638,4 +2711,42 @@ if (legendEl) {
       }
     }
   });
+}
+
+
+function triggerArtisticSynthesis(day) {
+  currentMode = 'ART_SYNTHESIS';
+  
+  blocks = generateMockHistoryForDate('2026-09-14').slice(0, 1000);
+  
+  document.getElementById('massive-dashboard-stats').style.display = 'none';
+  document.getElementById('archive-drawer').classList.remove('open');
+  document.querySelector('.canvas-container').classList.remove('sidebar-open');
+  
+  let artOverlay = document.getElementById('art-synthesis-overlay');
+  if (!artOverlay) {
+    artOverlay = document.createElement('div');
+    artOverlay.id = 'art-synthesis-overlay';
+    artOverlay.style.position = 'absolute';
+    artOverlay.style.bottom = '100px';
+    artOverlay.style.left = '50%';
+    artOverlay.style.transform = 'translateX(-50%)';
+    artOverlay.style.zIndex = '9000';
+    artOverlay.style.textAlign = 'center';
+    artOverlay.style.color = '#fff';
+    artOverlay.style.pointerEvents = 'none';
+    
+    artOverlay.innerHTML = `
+      <div style="font-family: 'Space Mono', monospace; font-size: 14px; letter-spacing: 0.4em; text-transform: uppercase; margin-bottom: 12px; text-shadow: 0 4px 12px rgba(0,0,0,0.5);">Synthesis Complete</div>
+      <div style="font-family: 'Outfit', sans-serif; font-size: 32px; font-weight: 300; letter-spacing: 0.1em; margin-bottom: 20px; text-shadow: 0 4px 12px rgba(0,0,0,0.5);">PORTRAIT OF JULY ${day}, 2026</div>
+      <button style="pointer-events: auto; padding: 12px 30px; background: #fff; color: #000; border: none; border-radius: 30px; font-family: 'Space Mono', monospace; font-size: 12px; font-weight: bold; text-transform: uppercase; cursor: pointer; letter-spacing: 0.1em; transition: transform 0.2s; box-shadow: 0 8px 24px rgba(0,0,0,0.4);" onclick="location.reload()">Return to Live Grid</button>
+    `;
+    document.body.appendChild(artOverlay);
+  } else {
+    artOverlay.style.display = 'block';
+    artOverlay.querySelector('div:nth-child(2)').textContent = `PORTRAIT OF JULY ${day}, 2026`;
+  }
+  
+  // Force one draw call
+  draw();
 }
