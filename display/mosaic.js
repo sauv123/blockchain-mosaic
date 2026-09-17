@@ -758,7 +758,8 @@ function seedRandom(seedStr) {
 
 // Deterministic Transaction Generator
 function getBlockTransactions(block) {
-  const hash = block.hash.replace('0x', '');
+  if (block.transactions) return block.transactions;
+  const hash = (block.hash || "0x000").replace('0x', '');
   const txs = [];
   const count = Math.min(6, Math.max(3, block.tx_count % 8));
 
@@ -1347,9 +1348,17 @@ function draw(timestamp) {
       
       ctx.beginPath();
       ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(0, 255, 136, ${sw.opacity})`;
-      ctx.lineWidth = 2;
+      if (sw.isWhale) {
+        ctx.strokeStyle = `rgba(255, 215, 0, ${sw.opacity})`; // Gold whale pulse
+        ctx.lineWidth = 4;
+        ctx.setLineDash([5, 5]);
+      } else {
+        ctx.strokeStyle = `rgba(0, 255, 136, ${sw.opacity})`;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([]);
+      }
       ctx.stroke();
+      ctx.setLineDash([]);
     }
   }
 
@@ -1743,18 +1752,29 @@ function calculateDailyTrends() {
 function updateStats() {
   const weatherLine = document.getElementById('cinematic-weather-line');
   if (weatherLine) {
-    let totalTx = 0;
-    let totalUsd = 0;
-    let directCount = 0;
+    // Use global session counters so it feels truly "live" and ever-growing
+    if (typeof window.sessionTotalTx === 'undefined') {
+      window.sessionTotalTx = 0;
+      window.sessionTotalUsd = 0;
+      window.sessionDirectCount = 0;
+    }
     
-    blocks.forEach(b => {
-      totalTx += b.tx_count;
-      const txs = getBlockTransactions(b);
+    // Only add the NEWEST block to the counter
+    const newestBlock = blocks[blocks.length - 1];
+    if (newestBlock && !newestBlock._counted) {
+      window.sessionTotalTx += newestBlock.tx_count;
+      const txs = getBlockTransactions(newestBlock);
       txs.forEach(t => {
-        totalUsd += t.valueUsd;
-        if (t.type === 'Plain Transfer') directCount++;
+        window.sessionTotalUsd += t.valueUsd || 0;
+        if (t.type === 'Plain Transfer') window.sessionDirectCount++;
       });
-    });
+      newestBlock._counted = true;
+    }
+    
+    let totalTx = window.sessionTotalTx;
+    let totalUsd = window.sessionTotalUsd;
+    let directCount = window.sessionDirectCount;
+    
 
     let weatherCondition = "calm and quiet";
     if (totalUsd > 5000000) weatherCondition = "experiencing heavy financial turbulence";
