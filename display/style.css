@@ -2637,9 +2637,9 @@ body.focus-mode #mosaic-canvas {
 
 /* Breathing animation for the weather line */
 @keyframes cinematic-breathe {
-  0% { transform: scale(1) translateY(0); filter: drop-shadow(0 4px 20px rgba(0,0,0,0.3)); }
-  50% { transform: scale(1.01) translateY(-2px); filter: drop-shadow(0 8px 30px rgba(0,0,0,0.5)); }
-  100% { transform: scale(1) translateY(0); filter: drop-shadow(0 4px 20px rgba(0,0,0,0.3)); }
+  0% { transform: translate(-50%, -50%) scale(1) translateY(0); filter: drop-shadow(0 4px 20px rgba(0,0,0,0.3)); }
+  50% { transform: translate(-50%, -50%) scale(1.01) translateY(-2px); filter: drop-shadow(0 8px 30px rgba(0,0,0,0.5)); }
+  100% { transform: translate(-50%, -50%) scale(1) translateY(0); filter: drop-shadow(0 4px 20px rgba(0,0,0,0.3)); }
 }
 
 #cinematic-weather-line {
