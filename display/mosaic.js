@@ -1334,12 +1334,32 @@ function drawTile(ctx, x, y, size, block, blockInterval, alpha, theme, isTracked
       baseColor = theme.accent;
     }
 
+    let isDimmed = false;
+    let isFilteredMatch = false;
+    if (typeof clickedLegendFilter !== 'undefined' && clickedLegendFilter !== null) {
+      if (tx.type !== clickedLegendFilter) isDimmed = true;
+      else isFilteredMatch = true;
+    }
+    const isBlockHovered = (typeof hoveredBlock !== 'undefined' && block === hoveredBlock);
+    
     if (block.whale_flag === 1 && (idx === whaleIndex1 || idx === whaleIndex2)) {
       ctx.fillStyle = `rgba(255, 255, 255, ${finalOpacity})`;
     } else {
-      ctx.fillStyle = baseColor.replace(')', `, ${finalOpacity})`).replace('hsl', 'hsla');
+      if (isDimmed) {
+        ctx.fillStyle = 'rgba(255,255,255,0.02)';
+        ctx.shadowBlur = 0;
+      } else {
+        ctx.fillStyle = baseColor.replace(')', `, ${finalOpacity})`).replace('hsl', 'hsla');
+        if (isBlockHovered || isFilteredMatch) {
+          ctx.shadowColor = baseColor;
+          ctx.shadowBlur = 12;
+        } else {
+          ctx.shadowBlur = 0;
+        }
+      }
     }
     ctx.fillRect(x + cell.col * subSize + 0.5, y + cell.row * subSize + 0.5, subSize - 1, subSize - 1);
+    ctx.shadowBlur = 0;
   });
 
   if (isTracked) {
@@ -2523,9 +2543,9 @@ if (legendEl) {
     const text = item.textContent.trim();
     
     let typeKey = null;
-    if (text.includes('Plain Transfer')) typeKey = 'Plain Transfer';
-    else if (text.includes('Token Swap')) typeKey = 'Token Swap';
-    else if (text.includes('NFT Mint')) typeKey = 'NFT Mint';
+    if (text.includes('Plain Transfer') || text.includes('Direct Payments')) typeKey = 'Plain Transfer';
+    else if (text.includes('Token Swap') || text.includes('Trading Coins')) typeKey = 'Token Swap';
+    else if (text.includes('NFT Mint') || text.includes('Digital Art')) typeKey = 'NFT Mint';
     if (!typeKey) return;
 
     if (clickedLegendFilter === typeKey) {
