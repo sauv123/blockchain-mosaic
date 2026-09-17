@@ -527,7 +527,9 @@ const playbackPlayBtn = document.getElementById('playback-play-btn');
   const genPortraitBtn = document.getElementById('generate-portrait-btn');
   if (genPortraitBtn) {
     genPortraitBtn.addEventListener('click', () => {
-      triggerArtisticSynthesis(historicalDayNumber, playbackFullList);
+      // Pass ALL the blocks loaded for this day (complete picture)
+      const dayData = playbackFullList && playbackFullList.length > 0 ? playbackFullList : blocks;
+      triggerArtisticSynthesis(historicalDayNumber, dayData);
     });
   }
 const playbackSlider = document.getElementById('playback-slider');
@@ -672,21 +674,8 @@ if (paletteSelect) {
   });
 }
 
-// Add theme toggle button
-const header = document.querySelector('.app-header');
-themeToggleBtn = document.createElement('button');
-themeToggleBtn.id = 'theme-toggle-btn';
-themeToggleBtn.textContent = 'Toggle Charcoal Theme';
-header.appendChild(themeToggleBtn);
-
-themeToggleBtn.addEventListener('click', () => {
-  currentTheme = currentTheme === 'warmGray' ? 'charcoal' : 'warmGray';
-  themeToggleBtn.textContent = currentTheme === 'warmGray' ? 'Toggle Charcoal Theme' : 'Toggle Warm Gray Theme';
-  document.body.className = currentTheme + '-theme';
-  applyThemeStyles();
-  updateRatioBarColors();
-  updateLegend();
-});
+// Theme toggle is in settings drawer — no floating button needed
+themeToggleBtn = null;
 
 function applyThemeStyles() {
   const theme = THEMES[currentTheme];
@@ -1174,52 +1163,43 @@ function draw(timestamp) {
 
   if (currentMode === 'ART_SYNTHESIS') {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.imageSmoothingEnabled = true;
-    
-    const totalTransactions = blocks.reduce((sum, b) => sum + getBlockTransactions(b).length, 0);
-    if (totalTransactions === 0) {
-       requestAnimationFrame(draw);
-       return;
-    }
-    
-    const aspect = canvas.width / canvas.height;
-    const rows = Math.ceil(Math.sqrt(totalTransactions / aspect));
-    const cols = Math.ceil(totalTransactions / rows);
-    
-    const cellW = canvas.width / cols;
-    const cellH = canvas.height / rows;
-    
-    let i = 0;
-    
     ctx.save();
-    ctx.filter = 'saturate(200%) blur(4px) contrast(150%) brightness(0.9)';
-    
-    blocks.forEach(block => {
+    // Artistic melt: bleed each block so colors blend at borders
+    ctx.filter = 'saturate(220%) blur(5px) contrast(140%)';
+    for (let index = 0; index < blocks.length; index++) {
+      const block = blocks[index];
+      const col = index % cols;
+      const row = Math.floor(index / cols);
+      const x = col * tileSize;
+      const y = row * tileSize;
       const txs = getBlockTransactions(block);
-      txs.forEach(tx => {
-        const c = i % cols;
-        const r = Math.floor(i / cols);
-        
-        const x = c * cellW;
-        const y = r * cellH;
-        
-        let baseColor = PALETTES[currentPalette][tx.type] || PALETTES[currentPalette]['default'];
-        
-        ctx.fillStyle = baseColor;
-        ctx.fillRect(x - 4, y - 4, cellW + 8, cellH + 8); // generous overlap to bleed
-        
-        i++;
-      });
-    });
-    
+      if (!txs || txs.length === 0) continue;
+      // Dominant tx type color for this block
+      const typeCount = {};
+      txs.forEach(t => { typeCount[t.type] = (typeCount[t.type]||0)+1; });
+      const dominantTx = Object.keys(typeCount).reduce((a,b)=>typeCount[a]>typeCount[b]?a:b);
+      const color = PALETTES[currentPalette][dominantTx] || PALETTES[currentPalette]['default'];
+      ctx.fillStyle = color;
+      // Draw with generous overlap so blur fuses the borders
+      ctx.fillRect(x - 4, y - 4, tileSize + 8, tileSize + 8);
+    }
     ctx.restore();
     
-    // Draw a luxurious overlay frame
-    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-    ctx.lineWidth = 40;
-    ctx.strokeRect(20, 20, canvas.width - 40, canvas.height - 40);
-    
-    requestAnimationFrame(draw);
+    // Luxurious vignette frame
+    ctx.save();
+    const vig = ctx.createRadialGradient(canvas.width/2, canvas.height/2, canvas.width * 0.3, canvas.width/2, canvas.height/2, canvas.width * 0.8);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.4)');
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+
+    // GSAP_BOOT_DONE
+  if (typeof gsap !== 'undefined') {
+    gsap.from('.stat-item', { opacity: 0, y: -8, duration: 0.6, stagger: 0.08, ease: 'power2.out', delay: 0.3 });
+    gsap.from('.legend-item', { opacity: 0, y: 6, duration: 0.5, stagger: 0.05, ease: 'power2.out', delay: 0.5 });
+  }
+  requestAnimationFrame(draw);
     return; // Skip normal grid drawing
   }
 
@@ -1782,7 +1762,13 @@ function updateStats() {
     else if (directCount > totalTx * 0.5) weatherCondition = "dominated by everyday human activity";
     
     const volStr = totalUsd > 1000000 ? '$' + (totalUsd / 1000000).toFixed(1) + 'M' : '$' + totalUsd.toLocaleString();
-    weatherLine.innerHTML = `<span style="color: var(--text-primary); text-shadow: 0 10px 40px var(--bg-color), 0 2px 10px var(--bg-color), 0 0 40px var(--bg-color); font-weight: 300; font-size: 32px; letter-spacing: -0.02em; line-height: 1.4; display: inline-block; animation: fadeIn 2s ease-out;">Today, <strong style="font-weight: 600;">${directCount.toLocaleString()}</strong> human payments moved <strong style="font-weight: 600;">${volStr}</strong>.<br>The network weather is <span style="font-style: italic; font-weight: 400; opacity: 0.8;">${weatherCondition}</span>.</span>`;
+    const newHtml = `<span style="font-weight: 300; font-size: clamp(20px, 2.5vw, 34px); letter-spacing: -0.02em; line-height: 1.4; display: inline-block;">Today, <strong style="font-weight: 600;">${directCount.toLocaleString()}</strong> human payments moved <strong style="font-weight: 600;">${volStr}</strong>.<br><span style="font-style: italic; font-weight: 300; opacity: 0.75;">The network weather is ${weatherCondition}.</span></span>`;
+    if (weatherLine.innerHTML !== newHtml) {
+      weatherLine.innerHTML = newHtml;
+      if (typeof gsap !== 'undefined') {
+        gsap.fromTo(weatherLine, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 1.2, ease: 'power3.out' });
+      }
+    }
   }
 
   if (blocks.length === 0) return;
@@ -2766,35 +2752,21 @@ function triggerArtisticSynthesis(day, dayBlocks) {
   currentMode = 'ART_SYNTHESIS';
   pausePlayback();
   
-  if (!dayBlocks || dayBlocks.length === 0) dayBlocks = generateMockHistoryForDate(`2026-07-${day < 10 ? '0'+day:day}`).slice(0, 1000);
+  // Use the blocks exactly as they were during playback — same data, same shape
+  if (dayBlocks && dayBlocks.length > 0) {
+    blocks = [...dayBlocks];
+  } else {
+    // Fallback: generate if no playback blocks provided
+    blocks = generateMockHistoryForDate('2026-07-' + (day < 10 ? '0'+day : String(day))).slice(0, maxTiles);
+  }
   
-  // ALGORITHM: Analyze the day's patterns to generate a beautiful, sorted picture
-  let allTxs = [];
   let counts = { 'Plain Transfer': 0, 'Token Swap': 0, 'NFT Mint': 0, 'Smart Contract': 0 };
-  
-  dayBlocks.forEach(b => {
+  blocks.forEach(b => {
     getBlockTransactions(b).forEach(t => {
-      allTxs.push(t);
       counts[t.type] = (counts[t.type] || 0) + 1;
     });
   });
-  
-  // Find dominant pattern
   let dominantType = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
-  
-  // Sort the transactions to create gradients/bands instead of noise
-  allTxs.sort((a, b) => {
-    // Primary sort by type to group colors
-    if (a.type !== b.type) return a.type.localeCompare(b.type);
-    // Secondary sort by value to create intensity gradients within the color bands
-    return (a.valueUsd || 0) - (b.valueUsd || 0);
-  });
-  
-  // Re-pack into a single massive mock block so the draw loop renders them sequentially in the grid
-  blocks = [{
-    block_number: 'SYNTHESIS',
-    transactions: allTxs
-  }];
   
   const weatherLine = document.getElementById('cinematic-weather-line');
   if (weatherLine) weatherLine.style.display = 'none';
@@ -2828,9 +2800,22 @@ function triggerArtisticSynthesis(day, dayBlocks) {
       <div style="font-family: 'Space Mono', monospace; font-size: 14px; letter-spacing: 0.4em; text-transform: uppercase; margin-bottom: 12px; text-shadow: 0 4px 12px rgba(0,0,0,0.5);">Synthesis Complete</div>
       <div id="art-portrait-title" style="font-family: 'Outfit', sans-serif; font-size: 32px; font-weight: 300; letter-spacing: 0.1em; margin-bottom: 12px; text-shadow: 0 4px 12px rgba(0,0,0,0.5);">PORTRAIT OF JULY ${day}, 2026</div>
       <div id="art-portrait-story" style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 300; color: rgba(255,255,255,0.8); max-width: 600px; margin: 0 auto 24px auto; line-height: 1.5; text-shadow: 0 2px 8px rgba(0,0,0,0.8);">${storyText}</div>
-      <button style="pointer-events: auto; padding: 12px 30px; background: #fff; color: #000; border: none; border-radius: 30px; font-family: 'Space Mono', monospace; font-size: 12px; font-weight: bold; text-transform: uppercase; cursor: pointer; letter-spacing: 0.1em; transition: transform 0.2s; box-shadow: 0 8px 24px rgba(0,0,0,0.4);" onclick="location.reload()">Return to Live Grid</button>
+      <button id="art-return-btn" style="pointer-events: auto; padding: 12px 30px; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.25); border-radius: 30px; font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 600; text-transform: uppercase; cursor: pointer; letter-spacing: 0.12em; backdrop-filter: blur(10px);">Return to Live Grid</button>
     `;
+    if (typeof gsap !== 'undefined') {
+      gsap.fromTo(artOverlay, { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.8, delay: 0.3, ease: 'power3.out' });
+    }
     document.body.appendChild(artOverlay);
+    setTimeout(() => {
+      const retBtn = document.getElementById('art-return-btn');
+      if (retBtn) {
+        retBtn.addEventListener('click', () => {
+          artOverlay.style.display = 'none';
+          if (typeof returnToLive === 'function') returnToLive();
+          else if (document.getElementById('return-live-btn')) document.getElementById('return-live-btn').click();
+        });
+      }
+    }, 100);
   } else {
     artOverlay.style.display = 'block';
     document.getElementById('art-portrait-title').textContent = `PORTRAIT OF JULY ${day}, 2026`;
