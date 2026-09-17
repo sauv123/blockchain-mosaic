@@ -1762,7 +1762,7 @@ function updateStats() {
     else if (directCount > totalTx * 0.5) weatherCondition = "dominated by everyday human activity";
     
     const volStr = totalUsd > 1000000 ? '$' + (totalUsd / 1000000).toFixed(1) + 'M' : '$' + totalUsd.toLocaleString();
-    weatherLine.innerHTML = `<span style="color: #000; text-shadow: none; font-weight: 500; font-size: 24px; padding: 20px; background: rgba(255,255,255,0.9); border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: inline-block;">Today, <strong>${directCount.toLocaleString()}</strong> human payments moved <strong>${volStr}</strong>.<br>The network weather is ${weatherCondition}.</span>`;
+    weatherLine.innerHTML = `<span style="color: var(--text-primary); text-shadow: 0 10px 40px var(--bg-color), 0 2px 10px var(--bg-color), 0 0 40px var(--bg-color); font-weight: 300; font-size: 32px; letter-spacing: -0.02em; line-height: 1.4; display: inline-block; animation: fadeIn 2s ease-out;">Today, <strong style="font-weight: 600;">${directCount.toLocaleString()}</strong> human payments moved <strong style="font-weight: 600;">${volStr}</strong>.<br>The network weather is <span style="font-style: italic; font-weight: 400; opacity: 0.8;">${weatherCondition}</span>.</span>`;
   }
 
   if (blocks.length === 0) return;
@@ -2653,6 +2653,12 @@ if (!filterCountTooltip) {
   filterCountTooltip.style.left = '32px';
   filterCountTooltip.style.fontFamily = "'Space Mono', monospace";
   filterCountTooltip.style.fontSize = '12px';
+  filterCountTooltip.style.background = 'var(--panel-bg)';
+  filterCountTooltip.style.border = '1px solid var(--border-color)';
+  filterCountTooltip.style.backdropFilter = 'blur(20px)';
+  filterCountTooltip.style.borderRadius = '12px';
+  filterCountTooltip.style.boxShadow = '0 20px 40px rgba(0,0,0,0.2)';
+  filterCountTooltip.style.padding = '12px 16px';
   filterCountTooltip.style.color = '#fff';
   filterCountTooltip.style.background = 'rgba(8,9,12,0.95)';
   filterCountTooltip.style.padding = '12px 18px';
@@ -2713,17 +2719,17 @@ if (legendEl) {
       const usdString = totalUsd > 1000000 ? '$' + (totalUsd / 1000000).toFixed(1) + 'M' : '$' + totalUsd.toLocaleString(undefined, { maximumFractionDigits: 0 });
 
       filterCountTooltip.innerHTML = `
-        <div style="font-family: 'Outfit', sans-serif; font-size: 13px; max-width: 260px; text-align: left; line-height: 1.5; padding: 4px;">
-          <div style="font-size: 13px; font-weight: bold; color: ${PALETTES[currentPalette][typeKey]}; margin-bottom: 8px; font-family: 'Space Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em; display: flex; align-items: center; gap: 8px;">
-            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${PALETTES[currentPalette][typeKey]}; box-shadow: 0 0 8px ${PALETTES[currentPalette][typeKey]};"></span>
+        <div style="font-family: 'Outfit', sans-serif; max-width: 280px; text-align: left; line-height: 1.6; padding: 8px 4px; color: var(--text-primary);">
+          <div style="font-size: 11px; font-weight: 600; color: ${PALETTES[currentPalette][typeKey]}; margin-bottom: 10px; font-family: 'Space Mono', monospace; text-transform: uppercase; letter-spacing: 0.15em; display: flex; align-items: center; gap: 8px;">
+            <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${PALETTES[currentPalette][typeKey]}; box-shadow: 0 0 10px ${PALETTES[currentPalette][typeKey]};"></span>
             ${titleName}
           </div>
-          <div style="color: rgba(255,255,255,0.85); margin-bottom: 12px; font-weight: 300;">
+          <div style="color: var(--text-secondary); margin-bottom: 16px; font-weight: 300; font-size: 13px;">
             ${explanation}
           </div>
-          <div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 8px; font-family: 'Space Mono', monospace; font-size: 11px;">
-            <span style="color: #00ff88;">${count.toLocaleString()} LIVE ACTIONS</span>
-            <span style="color: rgba(255,255,255,0.5);">${usdString} MOVED</span>
+          <div style="display: flex; justify-content: space-between; font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 500; opacity: 0.9;">
+            <span>${count.toLocaleString()} LIVE</span>
+            <span>${usdString} MOVED</span>
           </div>
         </div>
       `;

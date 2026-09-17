@@ -285,7 +285,7 @@ body.charcoal-theme #theme-toggle-btn:hover {
   top: 90px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 20;
+  z-index: 9999;
   display: none;
 }
 
@@ -775,7 +775,7 @@ body.charcoal-theme .subpixel-inspect-section {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding-bottom: 24px;
+  padding-bottom: 80px;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -1392,7 +1392,7 @@ body.charcoal-theme .sound-toggle-btn:hover {
 .playback-controls {
   display: none;
   position: absolute;
-  bottom: 24px;
+  bottom: 80px;
   left: 50%;
   transform: translateX(-50%);
   align-items: center;
@@ -1404,7 +1404,7 @@ body.charcoal-theme .sound-toggle-btn:hover {
   border-radius: 30px;
   padding: 10px 24px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-  z-index: 20;
+  z-index: 9999;
   width: 480px;
   max-width: 90%;
 }
