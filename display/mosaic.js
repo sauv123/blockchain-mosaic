@@ -1714,33 +1714,2124 @@ function calculateDailyTrends() {
 }
 
 function updateStats() {
-  const giantTxEl = document.getElementById('giant-tx-count');
-  const giantUsdEl = document.getElementById('giant-usd-amount');
-  const giantPaymentsEl = document.getElementById('giant-payments-count');
-
-  if (giantTxEl && giantUsdEl && giantPaymentsEl) {
+  const weatherLine = document.getElementById('cinematic-weather-line');
+  if (weatherLine) {
     let totalTx = 0;
     let totalUsd = 0;
-    let totalPayments = 0;
+    let directCount = 0;
     
     blocks.forEach(b => {
       totalTx += b.tx_count;
       const txs = getBlockTransactions(b);
       txs.forEach(t => {
         totalUsd += t.valueUsd;
-        if (t.type === 'Plain Transfer') totalPayments++;
+        if (t.type === 'Plain Transfer') directCount++;
       });
     });
+
+    let weatherCondition = "calm and quiet";
+    if (totalUsd > 5000000) weatherCondition = "experiencing heavy financial turbulence";
+    else if (totalTx > 500) weatherCondition = "highly congested and expensive";
+    else if (directCount > totalTx * 0.5) weatherCondition = "dominated by everyday human activity";
     
-    giantTxEl.textContent = totalTx.toLocaleString();
-    if (totalUsd > 1000000000) {
-      giantUsdEl.textContent = '$' + (totalUsd / 1000000000).toFixed(1) + 'B';
-    } else if (totalUsd > 1000000) {
-      giantUsdEl.textContent = '$' + (totalUsd / 1000000).toFixed(1) + 'M';
-    } else {
-      giantUsdEl.textContent = '$' + totalUsd.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    const volStr = totalUsd > 1000000 ? '
+
+  if (blocks.length === 0) return;
+  
+  if (currentMode === 'LIVE') {
+    const latest = blocks[blocks.length - 1];
+    if (latestBlockVal) latestBlockVal.textContent = `#${latest.block_number}`;
+
+    const sumFee = blocks.reduce((sum, b) => sum + b.base_fee_gwei, 0);
+    const avgFee = sumFee / blocks.length;
+    
+    if (avgFeeVal) {
+      if (currentChain === 'solana') {
+        avgFeeVal.textContent = `${avgFee.toFixed(5)} SOL`;
+      } else {
+        avgFeeVal.textContent = `${avgFee.toFixed(1)} Gwei`;
+      }
     }
-    giantPaymentsEl.textContent = totalPayments.toLocaleString();
+
+    const fillPercent = Math.min((blocks.length / maxTiles) * 100, 100);
+    if (gridFillVal) gridFillVal.textContent = `${Math.round(fillPercent)}%`;
+  } else {
+    if (latestBlockVal) latestBlockVal.textContent = selectedHistoricalDate;
+    
+    const sumFee = blocks.reduce((sum, b) => sum + b.base_fee_gwei, 0);
+    const avgFee = sumFee / blocks.length;
+    if (avgFeeVal) avgFeeVal.textContent = `${avgFee.toFixed(1)} Gwei`;
+    
+    if (gridFillVal) gridFillVal.textContent = `${blocks.length}`;
+  }
+
+  calculateDailyTrends();
+}
+
+function getBlockAtCoords(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+
+  const canvasX = (clientX - rect.left) * scaleX;
+  const canvasY = (clientY - rect.top) * scaleY;
+
+  const col = Math.floor(canvasX / tileSize);
+  const row = Math.floor(canvasY / tileSize);
+
+  if (col >= 0 && col < cols && row >= 0 && row < rows) {
+    const index = row * cols + col;
+    if (index >= 0 && index < blocks.length) {
+      return blocks[index];
+    }
+  }
+  return null;
+}
+
+function updateTooltip(block, e) {
+  if (!block || (detailsSidebar && detailsSidebar.classList.contains('open'))) {
+    hoverTooltip.classList.remove('visible');
+    return;
+  }
+
+  const txs = getBlockTransactions(block);
+  const totalBlockUsd = txs.reduce((sum, t) => sum + t.valueUsd, 0);
+  
+  let mood = 'Calm';
+  if (block.base_fee_gwei > (currentChain === 'solana' ? 0.00015 : 60)) mood = 'Congested 🔥';
+  else if (block.tx_count > (currentChain === 'solana' ? 2000 : 200)) mood = 'Bustling ⚡';
+  else if (block.tx_count > (currentChain === 'solana' ? 1500 : 100)) mood = 'Active';
+
+  const feeUnit = currentChain === 'solana' ? 'SOL' : 'Gwei';
+
+  hoverTooltip.innerHTML = `
+    <div style="font-family: 'Outfit', sans-serif; font-size: 13px; line-height: 1.5; color: rgba(255,255,255,0.9); padding: 4px;">
+      This block was mostly filled with <strong>${block.contract_ratio > 0.6 ? 'Trading Coins' : 'Direct Payments'}</strong>. 
+      <br><br>
+      Network traffic was <strong>${block.base_fee_gwei > 50 ? 'Congested and Expensive' : 'Quiet and Cheap'}</strong>, costing people around <strong>${block.base_fee_gwei.toFixed(0)} Gwei</strong>.
+      <br><br>
+      <span style="color: #00ff88;">${block.tx_count} Total Actions</span> • <span style="color: rgba(255,255,255,0.5);">$${totalBlockUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })} Moved</span>
+    </div>
+  `;
+
+  hoverTooltip.style.left = `${e.pageX}px`;
+  hoverTooltip.style.top = `${e.pageY}px`;
+  hoverTooltip.classList.add('visible');
+}
+
+canvas.addEventListener('mousemove', (e) => {
+  lastInteractionTime = Date.now();
+  const block = getBlockAtCoords(e.clientX, e.clientY);
+  if (block !== hoveredBlock) {
+    hoveredBlock = block;
+  }
+  updateTooltip(block, e);
+});
+
+canvas.addEventListener('mouseleave', () => {
+  hoveredBlock = null;
+  hoverTooltip.classList.remove('visible');
+});
+
+canvas.addEventListener('click', (e) => {
+  lastInteractionTime = Date.now();
+  const block = getBlockAtCoords(e.clientX, e.clientY);
+  if (block) {
+    hoverTooltip.classList.remove('visible');
+    activePopoverBlock = block;
+    showBlockDetails(block);
+
+    // Trigger Artsy Radial Ripple Wave GSAP Timeline
+    const idx = blocks.indexOf(block);
+    if (idx !== -1 && typeof gsap !== 'undefined') {
+      rippleOriginCol = idx % cols;
+      rippleOriginRow = Math.floor(idx / cols);
+      rippleProgress.value = 0;
+
+      gsap.killTweensOf(rippleProgress);
+      gsap.to(rippleProgress, {
+        value: 1.0,
+        duration: 1.2,
+        ease: 'power2.out',
+        onComplete: () => {
+          rippleOriginCol = -1;
+          rippleOriginRow = -1;
+          rippleProgress.value = 0;
+        }
+      });
+    }
+  }
+});
+
+// Render Analyst Network graph
+function renderNetworkGraph(block) {
+  const gCanvas = document.getElementById('network-canvas');
+  if (!gCanvas) return;
+  const gCtx = gCanvas.getContext('2d');
+  const theme = THEMES[currentTheme];
+
+  gCtx.clearRect(0, 0, gCanvas.width, gCanvas.height);
+  
+  const txs = getBlockTransactions(block);
+  if (txs.length === 0) return;
+
+  const width = gCanvas.width;
+  const height = gCanvas.height;
+
+  const nodes = [
+    { id: 'Source', x: width * 0.15, y: height * 0.5, label: 'Source Wallet' },
+    { id: 'Router', x: width * 0.5, y: height * 0.5, label: 'Contract/Router' },
+    { id: 'Dest1', x: width * 0.85, y: height * 0.25, label: 'Exchange Wallet' },
+    { id: 'Dest2', x: width * 0.85, y: height * 0.75, label: 'Cold Storage' }
+  ];
+
+  txs.forEach((tx, idx) => {
+    let start = nodes[0];
+    let end = nodes[1];
+    if (idx % 3 === 1) {
+      start = nodes[1];
+      end = nodes[2];
+    } else if (idx % 3 === 2) {
+      start = nodes[1];
+      end = nodes[3];
+    }
+
+    gCtx.strokeStyle = tx.label.includes('Tracked') ? 'rgba(0, 229, 255, 0.6)' : theme.accent.replace(')', ', 0.35)').replace('hsl', 'hsla');
+    gCtx.lineWidth = Math.max(1, Math.min(4, tx.valueUsd / 2000));
+    
+    gCtx.beginPath();
+    gCtx.moveTo(start.x, start.y);
+    gCtx.lineTo(end.x, end.y);
+    gCtx.stroke();
+
+    const midX = (start.x + end.x) / 2;
+    const midY = (start.y + end.y) / 2;
+    
+    gCtx.fillStyle = gCtx.strokeStyle;
+    gCtx.beginPath();
+    gCtx.arc(midX, midY, 3, 0, Math.PI * 2);
+    gCtx.fill();
+  });
+
+  nodes.forEach(node => {
+    gCtx.fillStyle = theme.bg;
+    gCtx.strokeStyle = theme.graphNode;
+    gCtx.lineWidth = 2;
+    
+    gCtx.beginPath();
+    gCtx.arc(node.x, node.y, 10, 0, Math.PI * 2);
+    gCtx.fill();
+    gCtx.stroke();
+
+    gCtx.fillStyle = theme.graphText;
+    gCtx.font = '500 8px Outfit';
+    gCtx.textAlign = 'center';
+    gCtx.fillText(node.id, node.x, node.y + 3);
+
+    gCtx.fillStyle = theme.graphText;
+    gCtx.font = '500 7px Outfit';
+    gCtx.fillText(node.label, node.x, node.y - 14);
+  });
+}
+
+function showBlockDetails(block) {
+  if (popBlockNum) popBlockNum.textContent = `#${block.block_number}`;
+  
+  const txs = getBlockTransactions(block);
+  const primaryTx = txs[0] || {
+    from: '0x0000000000000000000000000000000000000000',
+    to: '0x0000000000000000000000000000000000000000',
+    valueEth: 0,
+    valueUsd: 0,
+    asset: 'ETH',
+    type: 'Plain Transfer',
+    gasPriceGwei: 15,
+    confirmations: 12,
+    label: 'None',
+    anomaly: 'None'
+  };
+
+  const totalBlockUsd = txs.reduce((sum, t) => sum + t.valueUsd, 0);
+  if (popAmountUsd) popAmountUsd.textContent = `$${totalBlockUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (popTime) popTime.textContent = `${Math.floor((Date.now() - block.timestamp * 1000) / 1000)}s ago`;
+
+  // Render Subpixel Interactive Bar
+  const subpixelGrid = document.getElementById('subpixel-inspect-grid');
+  if (subpixelGrid) {
+    subpixelGrid.innerHTML = '';
+    const density = Math.max(0.1, Math.min(0.85, block.tx_count / 300));
+    const targetOnCount = Math.max(6, Math.floor(density * 64));
+    
+    for (let i = 0; i < targetOnCount; i++) {
+      const tx = txs[i % txs.length] || primaryTx;
+      const cell = document.createElement('div');
+      cell.classList.add('subpixel-inspect-cell');
+      
+      let baseColor = PALETTES[currentPalette][tx.type] || PALETTES[currentPalette]['default'];
+      if (currentPalette === 'monochrome') {
+        const theme = THEMES[currentTheme];
+        baseColor = theme.accent;
+      }
+      cell.style.backgroundColor = baseColor;
+      cell.title = `${tx.type} - $${tx.valueUsd.toLocaleString()}`;
+
+      // Click to open detailed single Transaction Inspector Modal overlay
+      cell.addEventListener('click', () => {
+        const overlay = document.getElementById('tx-inspector-overlay');
+        document.getElementById('tx-inspect-value-usd').textContent = `$${tx.valueUsd.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+        document.getElementById('tx-inspect-amount').textContent = `${tx.valueEth.toFixed(4)} ${currentChain === 'solana' ? 'SOL' : tx.asset}`;
+        document.getElementById('tx-inspect-type').textContent = tx.type;
+        document.getElementById('tx-inspect-gas').textContent = currentChain === 'solana' ? `${tx.gasPriceGwei / 1000000} SOL` : `${tx.gasPriceGwei} Gwei`;
+        document.getElementById('tx-inspect-protocol').textContent = tx.label;
+        document.getElementById('tx-inspect-from').textContent = tx.from;
+        document.getElementById('tx-inspect-to').textContent = tx.to;
+        overlay.classList.add('open');
+      });
+      subpixelGrid.appendChild(cell);
+    }
+  }
+  
+  if (popFeePaid) {
+    if (currentChain === 'solana') {
+      popFeePaid.textContent = `$${(block.base_fee_gwei * 150).toFixed(4)} (${block.base_fee_gwei} SOL)`;
+    } else {
+      popFeePaid.textContent = `$${(block.base_fee_gwei * 0.05).toFixed(2)} (${block.base_fee_gwei} Gwei)`;
+    }
+  }
+
+  let direction = 'No tracked wallet';
+  if (trackedAddress && trackedAddress.length > 0) {
+    const match = txs.find(tx => tx.from.includes(trackedAddress) || tx.to.includes(trackedAddress));
+    if (match) {
+      direction = match.from.includes(trackedAddress) ? 'Sent ↗' : 'Received ↙';
+    } else {
+      direction = 'Not involved';
+    }
+  }
+  if (popDirection) popDirection.textContent = direction;
+
+  if (popFrom) popFrom.textContent = primaryTx.from;
+  if (popTo) popTo.textContent = primaryTx.to;
+
+  if (popTraderType) popTraderType.textContent = primaryTx.type;
+  if (popTraderAsset) popTraderAsset.textContent = currentChain === 'solana' ? 'SOL' : primaryTx.asset;
+  
+  if (popTraderGas) {
+    if (currentChain === 'solana') {
+      popTraderGas.textContent = `${primaryTx.gasPriceGwei / 1000000} SOL`;
+    } else {
+      popTraderGas.textContent = `${primaryTx.gasPriceGwei} Gwei`;
+    }
+  }
+
+  if (popTraderValueUsd) popTraderValueUsd.textContent = `$${primaryTx.valueUsd.toLocaleString()}`;
+
+  const seed = parseInt(block.hash.substring(4, 6), 16);
+  if (popAnalystCluster) popAnalystCluster.textContent = `Cluster #${seed.toString(16).toUpperCase()}`;
+  if (popAnalystLabel) popAnalystLabel.textContent = primaryTx.label;
+  
+  const activeAnomaly = txs.find(t => t.anomaly !== 'None');
+  if (popAnalystAnomaly) popAnalystAnomaly.textContent = activeAnomaly ? activeAnomaly.anomaly : 'None';
+  if (popAnalystFirstSeen) popAnalystFirstSeen.textContent = `${(seed % 30) + 1} days ago`;
+
+  let mood = 'Calm';
+  if (block.base_fee_gwei > (currentChain === 'solana' ? 0.00015 : 60)) mood = 'Congested 🔥';
+  else if (block.tx_count > (currentChain === 'solana' ? 2000 : 200)) mood = 'Bustling ⚡';
+  else if (block.tx_count > (currentChain === 'solana' ? 1500 : 100)) mood = 'Active';
+  if (popMood) popMood.textContent = mood;
+
+  if (popTxCount) popTxCount.textContent = block.tx_count;
+  if (popHash) popHash.textContent = block.hash;
+  if (popExplorerLink) popExplorerLink.href = currentChain === 'solana' ? `https://solscan.io/block/${block.block_number}` : `https://etherscan.io/block/${block.block_number}`;
+  if (popCopyHashBtn) popCopyHashBtn.textContent = 'Copy';
+
+  tabBtns.forEach(b => b.classList.remove('active'));
+  tabPanes.forEach(p => p.classList.remove('active'));
+  if (tabBtns[0]) tabBtns[0].classList.add('active');
+  if (tabPanes[0]) tabPanes[0].classList.add('active');
+
+  // Mutual exclusion: Close Settings drawer if details sidebar opens
+  if (archiveDrawer) {
+    archiveDrawer.classList.remove('open');
+  }
+
+  // Open sidebar drawer and shift layout
+  if (detailsSidebar) {
+    detailsSidebar.classList.add('open');
+  }
+  if (canvasContainer) {
+    canvasContainer.classList.add('sidebar-open');
+  }
+  
+  // Staggered resize to recalculate columns/rows inside the squished layout
+  setTimeout(resizeCanvas, 420);
+}
+
+// Drawer Toggling (Mutual exclusion: Close details sidebar if Settings drawer opens)
+archiveToggleBtn.addEventListener('click', () => {
+  lastInteractionTime = Date.now();
+  archiveDrawer.classList.toggle('open');
+  if (archiveDrawer.classList.contains('open') && detailsSidebar) {
+    detailsSidebar.classList.remove('open');
+    canvasContainer.classList.remove('sidebar-open');
+    setTimeout(resizeCanvas, 420);
+  }
+});
+
+closeDrawerBtn.addEventListener('click', () => {
+  lastInteractionTime = Date.now();
+  archiveDrawer.classList.remove('open');
+});
+
+// Render Archive Calendar Days (Dynamic current month based on today's local date)
+function renderCalendar() {
+  calendarDaysGrid.innerHTML = '';
+  
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth(); // 0-indexed (0 is Jan, 11 is Dec)
+  
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  
+  // Update header text to show current month and year
+  const monthYearLabel = document.querySelector('.archive-header h3') || document.querySelector('.archive-header-title');
+  if (monthYearLabel) {
+    monthYearLabel.textContent = `${monthNames[month]} ${year}`;
+  }
+
+  // Get first day of the month and number of days
+  const firstDayIndex = new Date(year, month, 1).getDay(); // Day of week (0-6)
+  const totalDays = new Date(year, month + 1, 0).getDate(); // Days in current month
+
+  // Render blank days for offset
+  for (let i = 0; i < firstDayIndex; i++) {
+    const blank = document.createElement('div');
+    blank.classList.add('calendar-day', 'empty-day');
+    calendarDaysGrid.appendChild(blank);
+  }
+
+  // Render dynamic days
+  for (let day = 1; day <= totalDays; day++) {
+    const dayEl = document.createElement('div');
+    dayEl.classList.add('calendar-day');
+    dayEl.textContent = day;
+
+    const formattedDay = day < 10 ? `0${day}` : day;
+    const formattedMonth = (month + 1) < 10 ? `0${month + 1}` : (month + 1);
+    const dateStr = `${year}-${formattedMonth}-${formattedDay}`;
+    dayEl.setAttribute('data-date', dateStr);
+
+    // If day is today or in the past, allow replaying historical data
+    if (day <= today.getDate()) {
+      const category = getCategoryForDay(day);
+      const dot = document.createElement('span');
+      dot.classList.add('day-dot');
+      
+      if (category === 'zen') {
+        dot.classList.add('calm');
+      } else if (category === 'dragon') {
+        dot.classList.add('congested');
+      } else {
+        dot.classList.add('active');
+      }
+      dayEl.appendChild(dot);
+
+      if (day === today.getDate()) {
+        dayEl.classList.add('active-selected');
+        dayEl.addEventListener('click', () => {
+          switchToLive();
+        });
+      } else {
+        dayEl.addEventListener('click', () => {
+          loadHistoricalPortrait(dateStr, day);
+        });
+      }
+    } else {
+      dayEl.classList.add('empty-day');
+    }
+
+    calendarDaysGrid.appendChild(dayEl);
+  }
+}
+
+// Playback ticker loop helper
+function tickPlayback() {
+  if (playbackIndex >= playbackFullList.length) {
+    pausePlayback();
+    return;
+  }
+  
+  playbackIndex++;
+  playbackSlider.value = playbackIndex;
+  blocks = playbackFullList.slice(0, playbackIndex);
+  updateStats();
+  
+  if (blocks.length > 0) {
+    audio.playBlockTones(blocks[blocks.length - 1]);
+  }
+  
+  playbackCounter.textContent = `${playbackIndex} / ${playbackFullList.length} Blocks`;
+}
+
+function startPlayback() {
+  if (isPlayingPlayback) return;
+  isPlayingPlayback = true;
+  playbackPlayBtn.textContent = 'Pause';
+  
+  if (playbackIndex >= playbackFullList.length) {
+    playbackIndex = 0;
+    blocks = [];
+    playbackSlider.value = 0;
+  }
+  
+  playbackIntervalId = setInterval(tickPlayback, 125);
+}
+
+// Sound playback play listener triggers audio context
+function pausePlayback() {
+  if (!isPlayingPlayback) return;
+  isPlayingPlayback = false;
+  playbackPlayBtn.textContent = 'Play';
+  clearInterval(playbackIntervalId);
+}
+
+// Slider scrub listener
+playbackSlider.addEventListener('input', (e) => {
+
+    // Parallax Time-Scrubbing Effect
+    const canvasContainer = document.getElementById('canvas-container');
+    if (canvasContainer) {
+      canvasContainer.style.transition = 'transform 0.1s ease-out, filter 0.1s ease-out';
+      // Slight 3D scale and tilt backwards as you drag to simulate moving fast
+      canvasContainer.style.transform = 'perspective(1000px) rotateX(2deg) scale(0.95) translateZ(-50px)';
+      canvasContainer.style.filter = 'blur(1px)';
+      
+      // Reset after dragging stops
+      clearTimeout(window.parallaxScrubTimer);
+      window.parallaxScrubTimer = setTimeout(() => {
+        canvasContainer.style.transform = 'perspective(1000px) rotateX(0deg) scale(1) translateZ(0)';
+        canvasContainer.style.filter = 'blur(0)';
+      }, 150);
+    }
+
+  pausePlayback();
+  playbackIndex = parseInt(e.target.value);
+  blocks = playbackFullList.slice(0, playbackIndex);
+  updateStats();
+  playbackCounter.textContent = `${playbackIndex} / ${playbackFullList.length} Blocks`;
+  lastInteractionTime = Date.now();
+});
+
+// Playback button toggler
+playbackPlayBtn.addEventListener('click', () => {
+  lastInteractionTime = Date.now();
+  if (isPlayingPlayback) {
+    pausePlayback();
+  } else {
+    audio.init();
+    startPlayback();
+  }
+});
+
+// Transition Layouts
+async function loadHistoricalPortrait(dateStr, dayNum) {
+  lastInteractionTime = Date.now();
+  archiveDrawer.classList.remove('open');
+  pausePlayback();
+
+  lastInteractionTime = Date.now();
+  archiveDrawer.classList.remove('open');
+  pausePlayback();
+  
+  if (currentMode === 'LIVE') {
+    liveBlocksCache = [...blocks];
+  }
+  
+  const dateObj = new Date(dateStr + 'T00:00:00');
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const monthStr = monthNames[dateObj.getMonth()];
+  const formattedFriendlyDate = `${monthStr} ${dayNum}, ${dateObj.getFullYear()}`;
+
+  currentMode = 'HISTORICAL';
+  selectedHistoricalDate = formattedFriendlyDate;
+  historicalDayNumber = dayNum;
+  
+  const category = getCategoryForDay(dayNum);
+  const categoryLabel = getCategoryLabel(category);
+  
+  liveIndicator.className = 'status-indicator historical-mode';
+  modeStatusText.textContent = `Viewing Archives: ${categoryLabel}`;
+  
+  statsBlockLabel.textContent = 'PORTRAIT DATE';
+  statsFillLabel.textContent = 'BLOCKS MINED';
+  
+  historicalDateLabel.textContent = `${formattedFriendlyDate} — ${categoryLabel}`;
+  historicalBanner.classList.add('active');
+
+  // Try to fetch real blocks from the backend
+  let fetchedBlocks = [];
+  try {
+    // Resolve HTTP host address dynamically
+    const protocol = window.location.protocol;
+    const host = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      ? `${window.location.hostname}:8080`
+      : 'blockchain-mosaic-production.up.railway.app'; // Change to match your production API domain
+    
+    const response = await fetch(`${protocol}//${host}/api/history/${dateStr}`);
+    if (response.ok) {
+      const resData = await response.json();
+      if (resData && resData.data && resData.data.length > 0) {
+        fetchedBlocks = resData.data;
+        console.log(`Successfully fetched ${fetchedBlocks.length} real historical blocks for ${dateStr}`);
+      }
+    }
+  } catch (err) {
+    console.warn(`Could not fetch live database blocks for ${dateStr}, using fallback generator:`, err.message);
+  }
+
+  // If no database blocks were returned, fall back to generative mock blocks
+  playbackFullList = fetchedBlocks.length > 0 ? fetchedBlocks : generateMockHistoryForDate(dateStr);
+  playbackIndex = 0;
+  blocks = [];
+  
+  playbackSlider.max = playbackFullList.length;
+  playbackSlider.value = 0;
+  playbackCounter.textContent = `0 / ${playbackFullList.length} Blocks`;
+  playbackPlayBtn.textContent = 'Play';
+  playbackControls.classList.add('active');
+
+  updateStats();
+  
+  document.querySelectorAll('.calendar-day').forEach(el => {
+    el.classList.remove('active-selected');
+  });
+  const days = document.querySelectorAll('.calendar-day');
+  // Find matching day element by data-date attribute
+  const match = Array.from(days).find(el => el.getAttribute('data-date') === dateStr);
+  if (match) {
+    match.classList.add('active-selected');
+  }
+}
+
+function switchToLive() {
+  lastInteractionTime = Date.now();
+  archiveDrawer.classList.remove('open');
+  pausePlayback();
+  playbackControls.classList.remove('active');
+  
+  if (currentMode === 'HISTORICAL') {
+    currentMode = 'LIVE';
+    
+    tileSize = 64;
+    resizeCanvas();
+    
+    blocks = [...liveBlocksCache];
+    
+    liveIndicator.className = 'status-indicator live';
+    modeStatusText.textContent = 'A Living Portrait of the Blockchain';
+    statsBlockLabel.textContent = 'LATEST BLOCK';
+    statsFillLabel.textContent = 'GRID FILL';
+    
+    historicalBanner.classList.remove('active');
+    updateStats();
+  }
+
+  document.querySelectorAll('.calendar-day').forEach(el => {
+    el.classList.remove('active-selected');
+  });
+  const days = document.querySelectorAll('.calendar-day');
+  if (days[10]) {
+    days[10].classList.add('active-selected');
+  }
+}
+
+returnLiveBtn.addEventListener('click', switchToLive);
+
+popCopyHashBtn.addEventListener('click', () => {
+  lastInteractionTime = Date.now();
+  if (activePopoverBlock) {
+    navigator.clipboard.writeText(activePopoverBlock.hash).then(() => {
+      popCopyHashBtn.textContent = 'Copied!';
+    });
+  }
+});
+
+// Transaction Inspector Dialog Closes
+const closeTxInspectorBtn = document.getElementById('close-tx-inspector');
+const txInspectorOverlay = document.getElementById('tx-inspector-overlay');
+if (closeTxInspectorBtn && txInspectorOverlay) {
+  closeTxInspectorBtn.addEventListener('click', () => {
+    txInspectorOverlay.classList.remove('open');
+  });
+  txInspectorOverlay.addEventListener('click', (e) => {
+    if (e.target === txInspectorOverlay) {
+      txInspectorOverlay.classList.remove('open');
+    }
+  });
+}
+
+// URL Parameters Router Logic
+function parseUrlParameters() {
+  const params = new URLSearchParams(window.location.search);
+  
+  // 1. Palette Router
+  const palette = params.get('palette');
+  if (palette && PALETTES[palette]) {
+    currentPalette = palette;
+    if (paletteSelect) paletteSelect.value = palette;
+  }
+  
+  // 2. Theme Router
+  const theme = params.get('theme');
+  if (theme && THEMES[theme]) {
+    currentTheme = theme;
+    document.body.className = theme + '-theme';
+    if (themeToggleBtn) {
+      themeToggleBtn.textContent = theme === 'warmGray' ? 'Toggle Charcoal Theme' : 'Toggle Warm Gray Theme';
+    }
+  }
+  
+  // 3. Chain Router
+  const chain = params.get('chain');
+  if (chain && ['ethereum', 'base', 'arbitrum', 'solana'].includes(chain)) {
+    currentChain = chain;
+    if (chainSelect) chainSelect.value = chain;
+    
+    // Trigger chain changes behavior
+    if (chain === 'ethereum') {
+      // Keep live WS connection
+    } else {
+      let cadence = 2000;
+      if (chain === 'arbitrum') cadence = 500;
+      else if (chain === 'solana') cadence = 400;
+      chainIntervalId = setInterval(generateSimulatedBlock, cadence);
+    }
+  }
+}
+
+function updateUrlParameters() {
+  const params = new URLSearchParams();
+  params.set('palette', currentPalette);
+  params.set('theme', currentTheme);
+  params.set('chain', currentChain);
+  window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+}
+
+// Attach sync updates to select boxes
+if (paletteSelect) {
+  paletteSelect.addEventListener('change', () => {
+    updateUrlParameters();
+  });
+}
+if (chainSelect) {
+  chainSelect.addEventListener('change', () => {
+    updateUrlParameters();
+  });
+}
+if (themeToggleBtn) {
+  themeToggleBtn.addEventListener('click', () => {
+    updateUrlParameters();
+  });
+}
+
+// GSAP Interface Entrance & Focus Animations
+function triggerGsapEntrances() {
+  if (typeof gsap === 'undefined') return;
+
+  // Staggered load for header controls
+  gsap.from('.brand-group', {
+    duration: 1.2,
+    y: -30,
+    opacity: 0,
+    ease: 'power4.out'
+  });
+
+  gsap.from('.tracker-bar, #archive-toggle-btn, #guide-open-btn', {
+    duration: 1.0,
+    y: -20,
+    opacity: 0,
+    stagger: 0.15,
+    ease: 'power3.out',
+    delay: 0.2
+  });
+
+  // Stagger stats block cards
+  gsap.from('.stats-banner .stat-item', {
+    duration: 0.8,
+    opacity: 0,
+    scale: 0.9,
+    stagger: 0.08,
+    ease: 'back.out(1.5)',
+    delay: 0.4
+  });
+
+  // Slide up footer legend
+  gsap.from('.app-footer', {
+    duration: 1.0,
+    y: 40,
+    opacity: 0,
+    ease: 'power3.out',
+    delay: 0.6
+  });
+}
+
+// Override enter/exit focus mode using GSAP timelines for smooth aesthetic transition
+function enterFocusMode() {
+  if (typeof gsap !== 'undefined') {
+    const tl = gsap.timeline({
+      onComplete: () => {
+        setTimeout(resizeCanvas, 100);
+      }
+    });
+
+    // Close drawers first
+    if (archiveDrawer) archiveDrawer.classList.remove('open');
+    if (detailsSidebar) detailsSidebar.classList.remove('open');
+    if (canvasContainer) canvasContainer.classList.remove('sidebar-open');
+
+    // Fade and slide out UI controls
+    tl.to('.app-header, .app-footer, #historical-banner', {
+      duration: 0.4,
+      y: -20,
+      opacity: 0,
+      pointerEvents: 'none',
+      visibility: 'hidden',
+      ease: 'power2.inOut'
+    });
+
+    // Expand canvas container to full view
+    tl.to('.canvas-container', {
+      duration: 0.6,
+      padding: 0,
+      margin: 0,
+      width: '100vw',
+      height: '100vh',
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      zIndex: 10,
+      backgroundColor: THEMES[currentTheme].bg,
+      ease: 'power3.inOut'
+    }, '-=0.2');
+
+    // Smoothly morph into floating, organic drift layout
+    tl.to(focusFloatProgress, {
+      value: 1.0,
+      duration: 1.5,
+      ease: 'power2.out'
+    }, '-=0.4');
+
+    document.body.classList.add('focus-mode');
+  } else {
+    document.body.classList.add('focus-mode');
+    if (archiveDrawer) archiveDrawer.classList.remove('open');
+    if (detailsSidebar) detailsSidebar.classList.remove('open');
+    if (canvasContainer) canvasContainer.classList.remove('sidebar-open');
+    setTimeout(resizeCanvas, 550);
+  }
+}
+
+function exitFocusMode() {
+  if (typeof gsap !== 'undefined') {
+    const tl = gsap.timeline({
+      onComplete: () => {
+        // Remove GSAP-applied inline style overrides so it snaps back to standard CSS layout
+        const container = document.querySelector('.canvas-container');
+        if (container) {
+          container.style.position = '';
+          container.style.width = '';
+          container.style.height = '';
+          container.style.top = '';
+          container.style.left = '';
+          container.style.padding = '';
+          container.style.margin = '';
+          container.style.zIndex = '';
+          container.style.backgroundColor = '';
+        }
+        setTimeout(resizeCanvas, 100);
+      }
+    });
+
+    document.body.classList.remove('focus-mode');
+
+    // Smoothly settle back into rigid grid coordinates
+    tl.to(focusFloatProgress, {
+      value: 0.0,
+      duration: 0.8,
+      ease: 'power2.inOut'
+    });
+
+    // Restore canvas container layouts
+    tl.to('.canvas-container', {
+      duration: 0.5,
+      position: 'relative',
+      width: '100%',
+      height: '100%',
+      zIndex: '',
+      ease: 'power3.inOut'
+    }, '-=0.4');
+
+    // Fade and slide back UI elements
+    tl.to('.app-header, .app-footer', {
+      duration: 0.5,
+      y: 0,
+      opacity: 1,
+      pointerEvents: 'all',
+      visibility: 'visible',
+      ease: 'power3.out'
+    }, '-=0.2');
+  } else {
+    document.body.classList.remove('focus-mode');
+    setTimeout(resizeCanvas, 550);
+  }
+}
+
+// Resume Web Audio on first user interaction (browser security policy)
+window.addEventListener('click', () => {
+  if (audio) {
+    audio.init();
+    if (audio.ctx && audio.ctx.state === 'suspended') {
+      audio.ctx.resume();
+    }
+  }
+}, { once: true });
+
+// Run
+parseUrlParameters();
+renderCalendar();
+connectRelay();
+requestAnimationFrame(draw);
+updateStats();
+applyThemeStyles();
+updateRatioBarColors();
+updateLegend();
+triggerGsapEntrances();
+
+
+let clickedLegendFilter = null;
+let filterCountTooltip = document.getElementById('filter-count-tooltip');
+if (!filterCountTooltip) {
+  filterCountTooltip = document.createElement('div');
+  filterCountTooltip.id = 'filter-count-tooltip';
+  filterCountTooltip.style.position = 'absolute';
+  filterCountTooltip.style.bottom = '50px';
+  filterCountTooltip.style.left = '32px';
+  filterCountTooltip.style.fontFamily = "'Space Mono', monospace";
+  filterCountTooltip.style.fontSize = '12px';
+  filterCountTooltip.style.color = '#fff';
+  filterCountTooltip.style.background = 'rgba(8,9,12,0.95)';
+  filterCountTooltip.style.padding = '12px 18px';
+  filterCountTooltip.style.borderRadius = '8px';
+  filterCountTooltip.style.border = '1px solid rgba(255,255,255,0.15)';
+  filterCountTooltip.style.pointerEvents = 'none';
+  filterCountTooltip.style.opacity = '0';
+  document.body.appendChild(filterCountTooltip);
+}
+
+const legendEl = document.getElementById('legend-container');
+if (legendEl) {
+  legendEl.addEventListener('click', (e) => {
+    const item = e.target.closest('.legend-item');
+    if (!item) return;
+    const text = item.textContent.trim();
+    
+    let typeKey = null;
+    if (text.includes('Plain Transfer') || text.includes('Direct Payments')) typeKey = 'Plain Transfer';
+    else if (text.includes('Token Swap') || text.includes('Trading Coins')) typeKey = 'Token Swap';
+    else if (text.includes('NFT Mint') || text.includes('Digital Art')) typeKey = 'NFT Mint';
+    if (!typeKey) return;
+
+    if (clickedLegendFilter === typeKey) {
+      clickedLegendFilter = null;
+      document.querySelectorAll('.legend-item').forEach(el => el.style.opacity = '1');
+      if (typeof gsap !== 'undefined') gsap.to(filterCountTooltip, { opacity: 0, y: 10, duration: 0.3 });
+    } else {
+      clickedLegendFilter = typeKey;
+      document.querySelectorAll('.legend-item').forEach(el => el.style.opacity = '0.3');
+      item.style.opacity = '1';
+      
+      let count = 0;
+      let totalUsd = 0;
+      let explanation = "";
+      let titleName = "";
+      
+      if (typeKey === 'Plain Transfer') {
+        titleName = "Direct Payments";
+        explanation = "Simple wallet-to-wallet transfers. These represent the everyday economy of people sending money to one another.";
+      } else if (typeKey === 'Token Swap') {
+        titleName = "Trading Coins";
+        explanation = "People actively swapping different cryptocurrencies on decentralized exchanges. High activity here usually means the market is volatile.";
+      } else if (typeKey === 'NFT Mint') {
+        titleName = "Digital Art & NFTs";
+        explanation = "The creation and trading of unique digital assets, collectibles, and artwork permanently recorded on the network.";
+      }
+
+      blocks.slice(-maxTiles).forEach(b => {
+        getBlockTransactions(b).forEach(t => {
+          if (t.type === typeKey) {
+            count++;
+            totalUsd += t.valueUsd || 0;
+          }
+        });
+      });
+      
+      const usdString = totalUsd > 1000000 ? '$' + (totalUsd / 1000000).toFixed(1) + 'M' : '$' + totalUsd.toLocaleString(undefined, { maximumFractionDigits: 0 });
+
+      filterCountTooltip.innerHTML = `
+        <div style="font-family: 'Outfit', sans-serif; font-size: 13px; max-width: 260px; text-align: left; line-height: 1.5; padding: 4px;">
+          <div style="font-size: 13px; font-weight: bold; color: ${PALETTES.classic[typeKey]}; margin-bottom: 8px; font-family: 'Space Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em; display: flex; align-items: center; gap: 8px;">
+            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${PALETTES.classic[typeKey]}; box-shadow: 0 0 8px ${PALETTES.classic[typeKey]};"></span>
+            ${titleName}
+          </div>
+          <div style="color: rgba(255,255,255,0.85); margin-bottom: 12px; font-weight: 300;">
+            ${explanation}
+          </div>
+          <div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 8px; font-family: 'Space Mono', monospace; font-size: 11px;">
+            <span style="color: #00ff88;">${count.toLocaleString()} LIVE ACTIONS</span>
+            <span style="color: rgba(255,255,255,0.5);">${usdString} MOVED</span>
+          </div>
+        </div>
+      `;
+      if (typeof gsap !== 'undefined') {
+        gsap.killTweensOf(filterCountTooltip);
+        gsap.fromTo(filterCountTooltip, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4 });
+      }
+    }
+  });
+}
+
+
+function triggerArtisticSynthesis(day, dayBlocks) {
+  currentMode = 'ART_SYNTHESIS';
+  pausePlayback();
+  
+  if (!dayBlocks || dayBlocks.length === 0) dayBlocks = generateMockHistoryForDate(`2026-07-${day < 10 ? '0'+day:day}`).slice(0, 1000);
+  
+  // ALGORITHM: Analyze the day's patterns to generate a beautiful, sorted picture
+  let allTxs = [];
+  let counts = { 'Plain Transfer': 0, 'Token Swap': 0, 'NFT Mint': 0, 'Smart Contract': 0 };
+  
+  dayBlocks.forEach(b => {
+    getBlockTransactions(b).forEach(t => {
+      allTxs.push(t);
+      counts[t.type] = (counts[t.type] || 0) + 1;
+    });
+  });
+  
+  // Find dominant pattern
+  let dominantType = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+  
+  // Sort the transactions to create gradients/bands instead of noise
+  allTxs.sort((a, b) => {
+    // Primary sort by type to group colors
+    if (a.type !== b.type) return a.type.localeCompare(b.type);
+    // Secondary sort by value to create intensity gradients within the color bands
+    return (a.valueUsd || 0) - (b.valueUsd || 0);
+  });
+  
+  // Re-pack into a single massive mock block so the draw loop renders them sequentially in the grid
+  blocks = [{
+    block_number: 'SYNTHESIS',
+    transactions: allTxs
+  }];
+  
+  const weatherLine = document.getElementById('cinematic-weather-line');
+  if (weatherLine) weatherLine.style.display = 'none';
+  document.getElementById('archive-drawer').classList.remove('open');
+  document.querySelector('.canvas-container').classList.remove('sidebar-open');
+  
+  // Generate the story text
+  let storyText = "A calm, balanced day on the network.";
+  if (dominantType === 'Token Swap') {
+    storyText = "The fiery orange and pink bands dominate the canvas, visualizing a day of extreme market volatility and heavy coin trading.";
+  } else if (dominantType === 'Plain Transfer') {
+    storyText = "Cool, sweeping gradients reflect a quiet day dominated by simple, peer-to-peer human payments.";
+  } else if (dominantType === 'NFT Mint') {
+    storyText = "Vivid, geometric clusters burst across the canvas, capturing a frenzy of digital art creation.";
+  }
+  
+  let artOverlay = document.getElementById('art-synthesis-overlay');
+  if (!artOverlay) {
+    artOverlay = document.createElement('div');
+    artOverlay.id = 'art-synthesis-overlay';
+    artOverlay.style.position = 'absolute';
+    artOverlay.style.bottom = '80px';
+    artOverlay.style.left = '50%';
+    artOverlay.style.transform = 'translateX(-50%)';
+    artOverlay.style.zIndex = '9000';
+    artOverlay.style.textAlign = 'center';
+    artOverlay.style.color = '#fff';
+    artOverlay.style.pointerEvents = 'none';
+    
+    artOverlay.innerHTML = `
+      <div style="font-family: 'Space Mono', monospace; font-size: 14px; letter-spacing: 0.4em; text-transform: uppercase; margin-bottom: 12px; text-shadow: 0 4px 12px rgba(0,0,0,0.5);">Synthesis Complete</div>
+      <div id="art-portrait-title" style="font-family: 'Outfit', sans-serif; font-size: 32px; font-weight: 300; letter-spacing: 0.1em; margin-bottom: 12px; text-shadow: 0 4px 12px rgba(0,0,0,0.5);">PORTRAIT OF JULY ${day}, 2026</div>
+      <div id="art-portrait-story" style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 300; color: rgba(255,255,255,0.8); max-width: 600px; margin: 0 auto 24px auto; line-height: 1.5; text-shadow: 0 2px 8px rgba(0,0,0,0.8);">${storyText}</div>
+      <button style="pointer-events: auto; padding: 12px 30px; background: #fff; color: #000; border: none; border-radius: 30px; font-family: 'Space Mono', monospace; font-size: 12px; font-weight: bold; text-transform: uppercase; cursor: pointer; letter-spacing: 0.1em; transition: transform 0.2s; box-shadow: 0 8px 24px rgba(0,0,0,0.4);" onclick="location.reload()">Return to Live Grid</button>
+    `;
+    document.body.appendChild(artOverlay);
+  } else {
+    artOverlay.style.display = 'block';
+    document.getElementById('art-portrait-title').textContent = `PORTRAIT OF JULY ${day}, 2026`;
+    document.getElementById('art-portrait-story').textContent = storyText;
+  }
+}
+ + (totalUsd / 1000000).toFixed(1) + 'M' : '
+
+  if (blocks.length === 0) return;
+  
+  if (currentMode === 'LIVE') {
+    const latest = blocks[blocks.length - 1];
+    if (latestBlockVal) latestBlockVal.textContent = `#${latest.block_number}`;
+
+    const sumFee = blocks.reduce((sum, b) => sum + b.base_fee_gwei, 0);
+    const avgFee = sumFee / blocks.length;
+    
+    if (avgFeeVal) {
+      if (currentChain === 'solana') {
+        avgFeeVal.textContent = `${avgFee.toFixed(5)} SOL`;
+      } else {
+        avgFeeVal.textContent = `${avgFee.toFixed(1)} Gwei`;
+      }
+    }
+
+    const fillPercent = Math.min((blocks.length / maxTiles) * 100, 100);
+    if (gridFillVal) gridFillVal.textContent = `${Math.round(fillPercent)}%`;
+  } else {
+    if (latestBlockVal) latestBlockVal.textContent = selectedHistoricalDate;
+    
+    const sumFee = blocks.reduce((sum, b) => sum + b.base_fee_gwei, 0);
+    const avgFee = sumFee / blocks.length;
+    if (avgFeeVal) avgFeeVal.textContent = `${avgFee.toFixed(1)} Gwei`;
+    
+    if (gridFillVal) gridFillVal.textContent = `${blocks.length}`;
+  }
+
+  calculateDailyTrends();
+}
+
+function getBlockAtCoords(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+
+  const canvasX = (clientX - rect.left) * scaleX;
+  const canvasY = (clientY - rect.top) * scaleY;
+
+  const col = Math.floor(canvasX / tileSize);
+  const row = Math.floor(canvasY / tileSize);
+
+  if (col >= 0 && col < cols && row >= 0 && row < rows) {
+    const index = row * cols + col;
+    if (index >= 0 && index < blocks.length) {
+      return blocks[index];
+    }
+  }
+  return null;
+}
+
+function updateTooltip(block, e) {
+  if (!block || (detailsSidebar && detailsSidebar.classList.contains('open'))) {
+    hoverTooltip.classList.remove('visible');
+    return;
+  }
+
+  const txs = getBlockTransactions(block);
+  const totalBlockUsd = txs.reduce((sum, t) => sum + t.valueUsd, 0);
+  
+  let mood = 'Calm';
+  if (block.base_fee_gwei > (currentChain === 'solana' ? 0.00015 : 60)) mood = 'Congested 🔥';
+  else if (block.tx_count > (currentChain === 'solana' ? 2000 : 200)) mood = 'Bustling ⚡';
+  else if (block.tx_count > (currentChain === 'solana' ? 1500 : 100)) mood = 'Active';
+
+  const feeUnit = currentChain === 'solana' ? 'SOL' : 'Gwei';
+
+  hoverTooltip.innerHTML = `
+    <div style="font-family: 'Outfit', sans-serif; font-size: 13px; line-height: 1.5; color: rgba(255,255,255,0.9); padding: 4px;">
+      This block was mostly filled with <strong>${block.contract_ratio > 0.6 ? 'Trading Coins' : 'Direct Payments'}</strong>. 
+      <br><br>
+      Network traffic was <strong>${block.base_fee_gwei > 50 ? 'Congested and Expensive' : 'Quiet and Cheap'}</strong>, costing people around <strong>${block.base_fee_gwei.toFixed(0)} Gwei</strong>.
+      <br><br>
+      <span style="color: #00ff88;">${block.tx_count} Total Actions</span> • <span style="color: rgba(255,255,255,0.5);">$${totalBlockUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })} Moved</span>
+    </div>
+  `;
+
+  hoverTooltip.style.left = `${e.pageX}px`;
+  hoverTooltip.style.top = `${e.pageY}px`;
+  hoverTooltip.classList.add('visible');
+}
+
+canvas.addEventListener('mousemove', (e) => {
+  lastInteractionTime = Date.now();
+  const block = getBlockAtCoords(e.clientX, e.clientY);
+  if (block !== hoveredBlock) {
+    hoveredBlock = block;
+  }
+  updateTooltip(block, e);
+});
+
+canvas.addEventListener('mouseleave', () => {
+  hoveredBlock = null;
+  hoverTooltip.classList.remove('visible');
+});
+
+canvas.addEventListener('click', (e) => {
+  lastInteractionTime = Date.now();
+  const block = getBlockAtCoords(e.clientX, e.clientY);
+  if (block) {
+    hoverTooltip.classList.remove('visible');
+    activePopoverBlock = block;
+    showBlockDetails(block);
+
+    // Trigger Artsy Radial Ripple Wave GSAP Timeline
+    const idx = blocks.indexOf(block);
+    if (idx !== -1 && typeof gsap !== 'undefined') {
+      rippleOriginCol = idx % cols;
+      rippleOriginRow = Math.floor(idx / cols);
+      rippleProgress.value = 0;
+
+      gsap.killTweensOf(rippleProgress);
+      gsap.to(rippleProgress, {
+        value: 1.0,
+        duration: 1.2,
+        ease: 'power2.out',
+        onComplete: () => {
+          rippleOriginCol = -1;
+          rippleOriginRow = -1;
+          rippleProgress.value = 0;
+        }
+      });
+    }
+  }
+});
+
+// Render Analyst Network graph
+function renderNetworkGraph(block) {
+  const gCanvas = document.getElementById('network-canvas');
+  if (!gCanvas) return;
+  const gCtx = gCanvas.getContext('2d');
+  const theme = THEMES[currentTheme];
+
+  gCtx.clearRect(0, 0, gCanvas.width, gCanvas.height);
+  
+  const txs = getBlockTransactions(block);
+  if (txs.length === 0) return;
+
+  const width = gCanvas.width;
+  const height = gCanvas.height;
+
+  const nodes = [
+    { id: 'Source', x: width * 0.15, y: height * 0.5, label: 'Source Wallet' },
+    { id: 'Router', x: width * 0.5, y: height * 0.5, label: 'Contract/Router' },
+    { id: 'Dest1', x: width * 0.85, y: height * 0.25, label: 'Exchange Wallet' },
+    { id: 'Dest2', x: width * 0.85, y: height * 0.75, label: 'Cold Storage' }
+  ];
+
+  txs.forEach((tx, idx) => {
+    let start = nodes[0];
+    let end = nodes[1];
+    if (idx % 3 === 1) {
+      start = nodes[1];
+      end = nodes[2];
+    } else if (idx % 3 === 2) {
+      start = nodes[1];
+      end = nodes[3];
+    }
+
+    gCtx.strokeStyle = tx.label.includes('Tracked') ? 'rgba(0, 229, 255, 0.6)' : theme.accent.replace(')', ', 0.35)').replace('hsl', 'hsla');
+    gCtx.lineWidth = Math.max(1, Math.min(4, tx.valueUsd / 2000));
+    
+    gCtx.beginPath();
+    gCtx.moveTo(start.x, start.y);
+    gCtx.lineTo(end.x, end.y);
+    gCtx.stroke();
+
+    const midX = (start.x + end.x) / 2;
+    const midY = (start.y + end.y) / 2;
+    
+    gCtx.fillStyle = gCtx.strokeStyle;
+    gCtx.beginPath();
+    gCtx.arc(midX, midY, 3, 0, Math.PI * 2);
+    gCtx.fill();
+  });
+
+  nodes.forEach(node => {
+    gCtx.fillStyle = theme.bg;
+    gCtx.strokeStyle = theme.graphNode;
+    gCtx.lineWidth = 2;
+    
+    gCtx.beginPath();
+    gCtx.arc(node.x, node.y, 10, 0, Math.PI * 2);
+    gCtx.fill();
+    gCtx.stroke();
+
+    gCtx.fillStyle = theme.graphText;
+    gCtx.font = '500 8px Outfit';
+    gCtx.textAlign = 'center';
+    gCtx.fillText(node.id, node.x, node.y + 3);
+
+    gCtx.fillStyle = theme.graphText;
+    gCtx.font = '500 7px Outfit';
+    gCtx.fillText(node.label, node.x, node.y - 14);
+  });
+}
+
+function showBlockDetails(block) {
+  if (popBlockNum) popBlockNum.textContent = `#${block.block_number}`;
+  
+  const txs = getBlockTransactions(block);
+  const primaryTx = txs[0] || {
+    from: '0x0000000000000000000000000000000000000000',
+    to: '0x0000000000000000000000000000000000000000',
+    valueEth: 0,
+    valueUsd: 0,
+    asset: 'ETH',
+    type: 'Plain Transfer',
+    gasPriceGwei: 15,
+    confirmations: 12,
+    label: 'None',
+    anomaly: 'None'
+  };
+
+  const totalBlockUsd = txs.reduce((sum, t) => sum + t.valueUsd, 0);
+  if (popAmountUsd) popAmountUsd.textContent = `$${totalBlockUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (popTime) popTime.textContent = `${Math.floor((Date.now() - block.timestamp * 1000) / 1000)}s ago`;
+
+  // Render Subpixel Interactive Bar
+  const subpixelGrid = document.getElementById('subpixel-inspect-grid');
+  if (subpixelGrid) {
+    subpixelGrid.innerHTML = '';
+    const density = Math.max(0.1, Math.min(0.85, block.tx_count / 300));
+    const targetOnCount = Math.max(6, Math.floor(density * 64));
+    
+    for (let i = 0; i < targetOnCount; i++) {
+      const tx = txs[i % txs.length] || primaryTx;
+      const cell = document.createElement('div');
+      cell.classList.add('subpixel-inspect-cell');
+      
+      let baseColor = PALETTES[currentPalette][tx.type] || PALETTES[currentPalette]['default'];
+      if (currentPalette === 'monochrome') {
+        const theme = THEMES[currentTheme];
+        baseColor = theme.accent;
+      }
+      cell.style.backgroundColor = baseColor;
+      cell.title = `${tx.type} - $${tx.valueUsd.toLocaleString()}`;
+
+      // Click to open detailed single Transaction Inspector Modal overlay
+      cell.addEventListener('click', () => {
+        const overlay = document.getElementById('tx-inspector-overlay');
+        document.getElementById('tx-inspect-value-usd').textContent = `$${tx.valueUsd.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+        document.getElementById('tx-inspect-amount').textContent = `${tx.valueEth.toFixed(4)} ${currentChain === 'solana' ? 'SOL' : tx.asset}`;
+        document.getElementById('tx-inspect-type').textContent = tx.type;
+        document.getElementById('tx-inspect-gas').textContent = currentChain === 'solana' ? `${tx.gasPriceGwei / 1000000} SOL` : `${tx.gasPriceGwei} Gwei`;
+        document.getElementById('tx-inspect-protocol').textContent = tx.label;
+        document.getElementById('tx-inspect-from').textContent = tx.from;
+        document.getElementById('tx-inspect-to').textContent = tx.to;
+        overlay.classList.add('open');
+      });
+      subpixelGrid.appendChild(cell);
+    }
+  }
+  
+  if (popFeePaid) {
+    if (currentChain === 'solana') {
+      popFeePaid.textContent = `$${(block.base_fee_gwei * 150).toFixed(4)} (${block.base_fee_gwei} SOL)`;
+    } else {
+      popFeePaid.textContent = `$${(block.base_fee_gwei * 0.05).toFixed(2)} (${block.base_fee_gwei} Gwei)`;
+    }
+  }
+
+  let direction = 'No tracked wallet';
+  if (trackedAddress && trackedAddress.length > 0) {
+    const match = txs.find(tx => tx.from.includes(trackedAddress) || tx.to.includes(trackedAddress));
+    if (match) {
+      direction = match.from.includes(trackedAddress) ? 'Sent ↗' : 'Received ↙';
+    } else {
+      direction = 'Not involved';
+    }
+  }
+  if (popDirection) popDirection.textContent = direction;
+
+  if (popFrom) popFrom.textContent = primaryTx.from;
+  if (popTo) popTo.textContent = primaryTx.to;
+
+  if (popTraderType) popTraderType.textContent = primaryTx.type;
+  if (popTraderAsset) popTraderAsset.textContent = currentChain === 'solana' ? 'SOL' : primaryTx.asset;
+  
+  if (popTraderGas) {
+    if (currentChain === 'solana') {
+      popTraderGas.textContent = `${primaryTx.gasPriceGwei / 1000000} SOL`;
+    } else {
+      popTraderGas.textContent = `${primaryTx.gasPriceGwei} Gwei`;
+    }
+  }
+
+  if (popTraderValueUsd) popTraderValueUsd.textContent = `$${primaryTx.valueUsd.toLocaleString()}`;
+
+  const seed = parseInt(block.hash.substring(4, 6), 16);
+  if (popAnalystCluster) popAnalystCluster.textContent = `Cluster #${seed.toString(16).toUpperCase()}`;
+  if (popAnalystLabel) popAnalystLabel.textContent = primaryTx.label;
+  
+  const activeAnomaly = txs.find(t => t.anomaly !== 'None');
+  if (popAnalystAnomaly) popAnalystAnomaly.textContent = activeAnomaly ? activeAnomaly.anomaly : 'None';
+  if (popAnalystFirstSeen) popAnalystFirstSeen.textContent = `${(seed % 30) + 1} days ago`;
+
+  let mood = 'Calm';
+  if (block.base_fee_gwei > (currentChain === 'solana' ? 0.00015 : 60)) mood = 'Congested 🔥';
+  else if (block.tx_count > (currentChain === 'solana' ? 2000 : 200)) mood = 'Bustling ⚡';
+  else if (block.tx_count > (currentChain === 'solana' ? 1500 : 100)) mood = 'Active';
+  if (popMood) popMood.textContent = mood;
+
+  if (popTxCount) popTxCount.textContent = block.tx_count;
+  if (popHash) popHash.textContent = block.hash;
+  if (popExplorerLink) popExplorerLink.href = currentChain === 'solana' ? `https://solscan.io/block/${block.block_number}` : `https://etherscan.io/block/${block.block_number}`;
+  if (popCopyHashBtn) popCopyHashBtn.textContent = 'Copy';
+
+  tabBtns.forEach(b => b.classList.remove('active'));
+  tabPanes.forEach(p => p.classList.remove('active'));
+  if (tabBtns[0]) tabBtns[0].classList.add('active');
+  if (tabPanes[0]) tabPanes[0].classList.add('active');
+
+  // Mutual exclusion: Close Settings drawer if details sidebar opens
+  if (archiveDrawer) {
+    archiveDrawer.classList.remove('open');
+  }
+
+  // Open sidebar drawer and shift layout
+  if (detailsSidebar) {
+    detailsSidebar.classList.add('open');
+  }
+  if (canvasContainer) {
+    canvasContainer.classList.add('sidebar-open');
+  }
+  
+  // Staggered resize to recalculate columns/rows inside the squished layout
+  setTimeout(resizeCanvas, 420);
+}
+
+// Drawer Toggling (Mutual exclusion: Close details sidebar if Settings drawer opens)
+archiveToggleBtn.addEventListener('click', () => {
+  lastInteractionTime = Date.now();
+  archiveDrawer.classList.toggle('open');
+  if (archiveDrawer.classList.contains('open') && detailsSidebar) {
+    detailsSidebar.classList.remove('open');
+    canvasContainer.classList.remove('sidebar-open');
+    setTimeout(resizeCanvas, 420);
+  }
+});
+
+closeDrawerBtn.addEventListener('click', () => {
+  lastInteractionTime = Date.now();
+  archiveDrawer.classList.remove('open');
+});
+
+// Render Archive Calendar Days (Dynamic current month based on today's local date)
+function renderCalendar() {
+  calendarDaysGrid.innerHTML = '';
+  
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth(); // 0-indexed (0 is Jan, 11 is Dec)
+  
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  
+  // Update header text to show current month and year
+  const monthYearLabel = document.querySelector('.archive-header h3') || document.querySelector('.archive-header-title');
+  if (monthYearLabel) {
+    monthYearLabel.textContent = `${monthNames[month]} ${year}`;
+  }
+
+  // Get first day of the month and number of days
+  const firstDayIndex = new Date(year, month, 1).getDay(); // Day of week (0-6)
+  const totalDays = new Date(year, month + 1, 0).getDate(); // Days in current month
+
+  // Render blank days for offset
+  for (let i = 0; i < firstDayIndex; i++) {
+    const blank = document.createElement('div');
+    blank.classList.add('calendar-day', 'empty-day');
+    calendarDaysGrid.appendChild(blank);
+  }
+
+  // Render dynamic days
+  for (let day = 1; day <= totalDays; day++) {
+    const dayEl = document.createElement('div');
+    dayEl.classList.add('calendar-day');
+    dayEl.textContent = day;
+
+    const formattedDay = day < 10 ? `0${day}` : day;
+    const formattedMonth = (month + 1) < 10 ? `0${month + 1}` : (month + 1);
+    const dateStr = `${year}-${formattedMonth}-${formattedDay}`;
+    dayEl.setAttribute('data-date', dateStr);
+
+    // If day is today or in the past, allow replaying historical data
+    if (day <= today.getDate()) {
+      const category = getCategoryForDay(day);
+      const dot = document.createElement('span');
+      dot.classList.add('day-dot');
+      
+      if (category === 'zen') {
+        dot.classList.add('calm');
+      } else if (category === 'dragon') {
+        dot.classList.add('congested');
+      } else {
+        dot.classList.add('active');
+      }
+      dayEl.appendChild(dot);
+
+      if (day === today.getDate()) {
+        dayEl.classList.add('active-selected');
+        dayEl.addEventListener('click', () => {
+          switchToLive();
+        });
+      } else {
+        dayEl.addEventListener('click', () => {
+          loadHistoricalPortrait(dateStr, day);
+        });
+      }
+    } else {
+      dayEl.classList.add('empty-day');
+    }
+
+    calendarDaysGrid.appendChild(dayEl);
+  }
+}
+
+// Playback ticker loop helper
+function tickPlayback() {
+  if (playbackIndex >= playbackFullList.length) {
+    pausePlayback();
+    return;
+  }
+  
+  playbackIndex++;
+  playbackSlider.value = playbackIndex;
+  blocks = playbackFullList.slice(0, playbackIndex);
+  updateStats();
+  
+  if (blocks.length > 0) {
+    audio.playBlockTones(blocks[blocks.length - 1]);
+  }
+  
+  playbackCounter.textContent = `${playbackIndex} / ${playbackFullList.length} Blocks`;
+}
+
+function startPlayback() {
+  if (isPlayingPlayback) return;
+  isPlayingPlayback = true;
+  playbackPlayBtn.textContent = 'Pause';
+  
+  if (playbackIndex >= playbackFullList.length) {
+    playbackIndex = 0;
+    blocks = [];
+    playbackSlider.value = 0;
+  }
+  
+  playbackIntervalId = setInterval(tickPlayback, 125);
+}
+
+// Sound playback play listener triggers audio context
+function pausePlayback() {
+  if (!isPlayingPlayback) return;
+  isPlayingPlayback = false;
+  playbackPlayBtn.textContent = 'Play';
+  clearInterval(playbackIntervalId);
+}
+
+// Slider scrub listener
+playbackSlider.addEventListener('input', (e) => {
+
+    // Parallax Time-Scrubbing Effect
+    const canvasContainer = document.getElementById('canvas-container');
+    if (canvasContainer) {
+      canvasContainer.style.transition = 'transform 0.1s ease-out, filter 0.1s ease-out';
+      // Slight 3D scale and tilt backwards as you drag to simulate moving fast
+      canvasContainer.style.transform = 'perspective(1000px) rotateX(2deg) scale(0.95) translateZ(-50px)';
+      canvasContainer.style.filter = 'blur(1px)';
+      
+      // Reset after dragging stops
+      clearTimeout(window.parallaxScrubTimer);
+      window.parallaxScrubTimer = setTimeout(() => {
+        canvasContainer.style.transform = 'perspective(1000px) rotateX(0deg) scale(1) translateZ(0)';
+        canvasContainer.style.filter = 'blur(0)';
+      }, 150);
+    }
+
+  pausePlayback();
+  playbackIndex = parseInt(e.target.value);
+  blocks = playbackFullList.slice(0, playbackIndex);
+  updateStats();
+  playbackCounter.textContent = `${playbackIndex} / ${playbackFullList.length} Blocks`;
+  lastInteractionTime = Date.now();
+});
+
+// Playback button toggler
+playbackPlayBtn.addEventListener('click', () => {
+  lastInteractionTime = Date.now();
+  if (isPlayingPlayback) {
+    pausePlayback();
+  } else {
+    audio.init();
+    startPlayback();
+  }
+});
+
+// Transition Layouts
+async function loadHistoricalPortrait(dateStr, dayNum) {
+  lastInteractionTime = Date.now();
+  archiveDrawer.classList.remove('open');
+  pausePlayback();
+
+  lastInteractionTime = Date.now();
+  archiveDrawer.classList.remove('open');
+  pausePlayback();
+  
+  if (currentMode === 'LIVE') {
+    liveBlocksCache = [...blocks];
+  }
+  
+  const dateObj = new Date(dateStr + 'T00:00:00');
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const monthStr = monthNames[dateObj.getMonth()];
+  const formattedFriendlyDate = `${monthStr} ${dayNum}, ${dateObj.getFullYear()}`;
+
+  currentMode = 'HISTORICAL';
+  selectedHistoricalDate = formattedFriendlyDate;
+  historicalDayNumber = dayNum;
+  
+  const category = getCategoryForDay(dayNum);
+  const categoryLabel = getCategoryLabel(category);
+  
+  liveIndicator.className = 'status-indicator historical-mode';
+  modeStatusText.textContent = `Viewing Archives: ${categoryLabel}`;
+  
+  statsBlockLabel.textContent = 'PORTRAIT DATE';
+  statsFillLabel.textContent = 'BLOCKS MINED';
+  
+  historicalDateLabel.textContent = `${formattedFriendlyDate} — ${categoryLabel}`;
+  historicalBanner.classList.add('active');
+
+  // Try to fetch real blocks from the backend
+  let fetchedBlocks = [];
+  try {
+    // Resolve HTTP host address dynamically
+    const protocol = window.location.protocol;
+    const host = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      ? `${window.location.hostname}:8080`
+      : 'blockchain-mosaic-production.up.railway.app'; // Change to match your production API domain
+    
+    const response = await fetch(`${protocol}//${host}/api/history/${dateStr}`);
+    if (response.ok) {
+      const resData = await response.json();
+      if (resData && resData.data && resData.data.length > 0) {
+        fetchedBlocks = resData.data;
+        console.log(`Successfully fetched ${fetchedBlocks.length} real historical blocks for ${dateStr}`);
+      }
+    }
+  } catch (err) {
+    console.warn(`Could not fetch live database blocks for ${dateStr}, using fallback generator:`, err.message);
+  }
+
+  // If no database blocks were returned, fall back to generative mock blocks
+  playbackFullList = fetchedBlocks.length > 0 ? fetchedBlocks : generateMockHistoryForDate(dateStr);
+  playbackIndex = 0;
+  blocks = [];
+  
+  playbackSlider.max = playbackFullList.length;
+  playbackSlider.value = 0;
+  playbackCounter.textContent = `0 / ${playbackFullList.length} Blocks`;
+  playbackPlayBtn.textContent = 'Play';
+  playbackControls.classList.add('active');
+
+  updateStats();
+  
+  document.querySelectorAll('.calendar-day').forEach(el => {
+    el.classList.remove('active-selected');
+  });
+  const days = document.querySelectorAll('.calendar-day');
+  // Find matching day element by data-date attribute
+  const match = Array.from(days).find(el => el.getAttribute('data-date') === dateStr);
+  if (match) {
+    match.classList.add('active-selected');
+  }
+}
+
+function switchToLive() {
+  lastInteractionTime = Date.now();
+  archiveDrawer.classList.remove('open');
+  pausePlayback();
+  playbackControls.classList.remove('active');
+  
+  if (currentMode === 'HISTORICAL') {
+    currentMode = 'LIVE';
+    
+    tileSize = 64;
+    resizeCanvas();
+    
+    blocks = [...liveBlocksCache];
+    
+    liveIndicator.className = 'status-indicator live';
+    modeStatusText.textContent = 'A Living Portrait of the Blockchain';
+    statsBlockLabel.textContent = 'LATEST BLOCK';
+    statsFillLabel.textContent = 'GRID FILL';
+    
+    historicalBanner.classList.remove('active');
+    updateStats();
+  }
+
+  document.querySelectorAll('.calendar-day').forEach(el => {
+    el.classList.remove('active-selected');
+  });
+  const days = document.querySelectorAll('.calendar-day');
+  if (days[10]) {
+    days[10].classList.add('active-selected');
+  }
+}
+
+returnLiveBtn.addEventListener('click', switchToLive);
+
+popCopyHashBtn.addEventListener('click', () => {
+  lastInteractionTime = Date.now();
+  if (activePopoverBlock) {
+    navigator.clipboard.writeText(activePopoverBlock.hash).then(() => {
+      popCopyHashBtn.textContent = 'Copied!';
+    });
+  }
+});
+
+// Transaction Inspector Dialog Closes
+const closeTxInspectorBtn = document.getElementById('close-tx-inspector');
+const txInspectorOverlay = document.getElementById('tx-inspector-overlay');
+if (closeTxInspectorBtn && txInspectorOverlay) {
+  closeTxInspectorBtn.addEventListener('click', () => {
+    txInspectorOverlay.classList.remove('open');
+  });
+  txInspectorOverlay.addEventListener('click', (e) => {
+    if (e.target === txInspectorOverlay) {
+      txInspectorOverlay.classList.remove('open');
+    }
+  });
+}
+
+// URL Parameters Router Logic
+function parseUrlParameters() {
+  const params = new URLSearchParams(window.location.search);
+  
+  // 1. Palette Router
+  const palette = params.get('palette');
+  if (palette && PALETTES[palette]) {
+    currentPalette = palette;
+    if (paletteSelect) paletteSelect.value = palette;
+  }
+  
+  // 2. Theme Router
+  const theme = params.get('theme');
+  if (theme && THEMES[theme]) {
+    currentTheme = theme;
+    document.body.className = theme + '-theme';
+    if (themeToggleBtn) {
+      themeToggleBtn.textContent = theme === 'warmGray' ? 'Toggle Charcoal Theme' : 'Toggle Warm Gray Theme';
+    }
+  }
+  
+  // 3. Chain Router
+  const chain = params.get('chain');
+  if (chain && ['ethereum', 'base', 'arbitrum', 'solana'].includes(chain)) {
+    currentChain = chain;
+    if (chainSelect) chainSelect.value = chain;
+    
+    // Trigger chain changes behavior
+    if (chain === 'ethereum') {
+      // Keep live WS connection
+    } else {
+      let cadence = 2000;
+      if (chain === 'arbitrum') cadence = 500;
+      else if (chain === 'solana') cadence = 400;
+      chainIntervalId = setInterval(generateSimulatedBlock, cadence);
+    }
+  }
+}
+
+function updateUrlParameters() {
+  const params = new URLSearchParams();
+  params.set('palette', currentPalette);
+  params.set('theme', currentTheme);
+  params.set('chain', currentChain);
+  window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+}
+
+// Attach sync updates to select boxes
+if (paletteSelect) {
+  paletteSelect.addEventListener('change', () => {
+    updateUrlParameters();
+  });
+}
+if (chainSelect) {
+  chainSelect.addEventListener('change', () => {
+    updateUrlParameters();
+  });
+}
+if (themeToggleBtn) {
+  themeToggleBtn.addEventListener('click', () => {
+    updateUrlParameters();
+  });
+}
+
+// GSAP Interface Entrance & Focus Animations
+function triggerGsapEntrances() {
+  if (typeof gsap === 'undefined') return;
+
+  // Staggered load for header controls
+  gsap.from('.brand-group', {
+    duration: 1.2,
+    y: -30,
+    opacity: 0,
+    ease: 'power4.out'
+  });
+
+  gsap.from('.tracker-bar, #archive-toggle-btn, #guide-open-btn', {
+    duration: 1.0,
+    y: -20,
+    opacity: 0,
+    stagger: 0.15,
+    ease: 'power3.out',
+    delay: 0.2
+  });
+
+  // Stagger stats block cards
+  gsap.from('.stats-banner .stat-item', {
+    duration: 0.8,
+    opacity: 0,
+    scale: 0.9,
+    stagger: 0.08,
+    ease: 'back.out(1.5)',
+    delay: 0.4
+  });
+
+  // Slide up footer legend
+  gsap.from('.app-footer', {
+    duration: 1.0,
+    y: 40,
+    opacity: 0,
+    ease: 'power3.out',
+    delay: 0.6
+  });
+}
+
+// Override enter/exit focus mode using GSAP timelines for smooth aesthetic transition
+function enterFocusMode() {
+  if (typeof gsap !== 'undefined') {
+    const tl = gsap.timeline({
+      onComplete: () => {
+        setTimeout(resizeCanvas, 100);
+      }
+    });
+
+    // Close drawers first
+    if (archiveDrawer) archiveDrawer.classList.remove('open');
+    if (detailsSidebar) detailsSidebar.classList.remove('open');
+    if (canvasContainer) canvasContainer.classList.remove('sidebar-open');
+
+    // Fade and slide out UI controls
+    tl.to('.app-header, .app-footer, #historical-banner', {
+      duration: 0.4,
+      y: -20,
+      opacity: 0,
+      pointerEvents: 'none',
+      visibility: 'hidden',
+      ease: 'power2.inOut'
+    });
+
+    // Expand canvas container to full view
+    tl.to('.canvas-container', {
+      duration: 0.6,
+      padding: 0,
+      margin: 0,
+      width: '100vw',
+      height: '100vh',
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      zIndex: 10,
+      backgroundColor: THEMES[currentTheme].bg,
+      ease: 'power3.inOut'
+    }, '-=0.2');
+
+    // Smoothly morph into floating, organic drift layout
+    tl.to(focusFloatProgress, {
+      value: 1.0,
+      duration: 1.5,
+      ease: 'power2.out'
+    }, '-=0.4');
+
+    document.body.classList.add('focus-mode');
+  } else {
+    document.body.classList.add('focus-mode');
+    if (archiveDrawer) archiveDrawer.classList.remove('open');
+    if (detailsSidebar) detailsSidebar.classList.remove('open');
+    if (canvasContainer) canvasContainer.classList.remove('sidebar-open');
+    setTimeout(resizeCanvas, 550);
+  }
+}
+
+function exitFocusMode() {
+  if (typeof gsap !== 'undefined') {
+    const tl = gsap.timeline({
+      onComplete: () => {
+        // Remove GSAP-applied inline style overrides so it snaps back to standard CSS layout
+        const container = document.querySelector('.canvas-container');
+        if (container) {
+          container.style.position = '';
+          container.style.width = '';
+          container.style.height = '';
+          container.style.top = '';
+          container.style.left = '';
+          container.style.padding = '';
+          container.style.margin = '';
+          container.style.zIndex = '';
+          container.style.backgroundColor = '';
+        }
+        setTimeout(resizeCanvas, 100);
+      }
+    });
+
+    document.body.classList.remove('focus-mode');
+
+    // Smoothly settle back into rigid grid coordinates
+    tl.to(focusFloatProgress, {
+      value: 0.0,
+      duration: 0.8,
+      ease: 'power2.inOut'
+    });
+
+    // Restore canvas container layouts
+    tl.to('.canvas-container', {
+      duration: 0.5,
+      position: 'relative',
+      width: '100%',
+      height: '100%',
+      zIndex: '',
+      ease: 'power3.inOut'
+    }, '-=0.4');
+
+    // Fade and slide back UI elements
+    tl.to('.app-header, .app-footer', {
+      duration: 0.5,
+      y: 0,
+      opacity: 1,
+      pointerEvents: 'all',
+      visibility: 'visible',
+      ease: 'power3.out'
+    }, '-=0.2');
+  } else {
+    document.body.classList.remove('focus-mode');
+    setTimeout(resizeCanvas, 550);
+  }
+}
+
+// Resume Web Audio on first user interaction (browser security policy)
+window.addEventListener('click', () => {
+  if (audio) {
+    audio.init();
+    if (audio.ctx && audio.ctx.state === 'suspended') {
+      audio.ctx.resume();
+    }
+  }
+}, { once: true });
+
+// Run
+parseUrlParameters();
+renderCalendar();
+connectRelay();
+requestAnimationFrame(draw);
+updateStats();
+applyThemeStyles();
+updateRatioBarColors();
+updateLegend();
+triggerGsapEntrances();
+
+
+let clickedLegendFilter = null;
+let filterCountTooltip = document.getElementById('filter-count-tooltip');
+if (!filterCountTooltip) {
+  filterCountTooltip = document.createElement('div');
+  filterCountTooltip.id = 'filter-count-tooltip';
+  filterCountTooltip.style.position = 'absolute';
+  filterCountTooltip.style.bottom = '50px';
+  filterCountTooltip.style.left = '32px';
+  filterCountTooltip.style.fontFamily = "'Space Mono', monospace";
+  filterCountTooltip.style.fontSize = '12px';
+  filterCountTooltip.style.color = '#fff';
+  filterCountTooltip.style.background = 'rgba(8,9,12,0.95)';
+  filterCountTooltip.style.padding = '12px 18px';
+  filterCountTooltip.style.borderRadius = '8px';
+  filterCountTooltip.style.border = '1px solid rgba(255,255,255,0.15)';
+  filterCountTooltip.style.pointerEvents = 'none';
+  filterCountTooltip.style.opacity = '0';
+  document.body.appendChild(filterCountTooltip);
+}
+
+const legendEl = document.getElementById('legend-container');
+if (legendEl) {
+  legendEl.addEventListener('click', (e) => {
+    const item = e.target.closest('.legend-item');
+    if (!item) return;
+    const text = item.textContent.trim();
+    
+    let typeKey = null;
+    if (text.includes('Plain Transfer') || text.includes('Direct Payments')) typeKey = 'Plain Transfer';
+    else if (text.includes('Token Swap') || text.includes('Trading Coins')) typeKey = 'Token Swap';
+    else if (text.includes('NFT Mint') || text.includes('Digital Art')) typeKey = 'NFT Mint';
+    if (!typeKey) return;
+
+    if (clickedLegendFilter === typeKey) {
+      clickedLegendFilter = null;
+      document.querySelectorAll('.legend-item').forEach(el => el.style.opacity = '1');
+      if (typeof gsap !== 'undefined') gsap.to(filterCountTooltip, { opacity: 0, y: 10, duration: 0.3 });
+    } else {
+      clickedLegendFilter = typeKey;
+      document.querySelectorAll('.legend-item').forEach(el => el.style.opacity = '0.3');
+      item.style.opacity = '1';
+      
+      let count = 0;
+      let totalUsd = 0;
+      let explanation = "";
+      let titleName = "";
+      
+      if (typeKey === 'Plain Transfer') {
+        titleName = "Direct Payments";
+        explanation = "Simple wallet-to-wallet transfers. These represent the everyday economy of people sending money to one another.";
+      } else if (typeKey === 'Token Swap') {
+        titleName = "Trading Coins";
+        explanation = "People actively swapping different cryptocurrencies on decentralized exchanges. High activity here usually means the market is volatile.";
+      } else if (typeKey === 'NFT Mint') {
+        titleName = "Digital Art & NFTs";
+        explanation = "The creation and trading of unique digital assets, collectibles, and artwork permanently recorded on the network.";
+      }
+
+      blocks.slice(-maxTiles).forEach(b => {
+        getBlockTransactions(b).forEach(t => {
+          if (t.type === typeKey) {
+            count++;
+            totalUsd += t.valueUsd || 0;
+          }
+        });
+      });
+      
+      const usdString = totalUsd > 1000000 ? '$' + (totalUsd / 1000000).toFixed(1) + 'M' : '$' + totalUsd.toLocaleString(undefined, { maximumFractionDigits: 0 });
+
+      filterCountTooltip.innerHTML = `
+        <div style="font-family: 'Outfit', sans-serif; font-size: 13px; max-width: 260px; text-align: left; line-height: 1.5; padding: 4px;">
+          <div style="font-size: 13px; font-weight: bold; color: ${PALETTES.classic[typeKey]}; margin-bottom: 8px; font-family: 'Space Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em; display: flex; align-items: center; gap: 8px;">
+            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${PALETTES.classic[typeKey]}; box-shadow: 0 0 8px ${PALETTES.classic[typeKey]};"></span>
+            ${titleName}
+          </div>
+          <div style="color: rgba(255,255,255,0.85); margin-bottom: 12px; font-weight: 300;">
+            ${explanation}
+          </div>
+          <div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 8px; font-family: 'Space Mono', monospace; font-size: 11px;">
+            <span style="color: #00ff88;">${count.toLocaleString()} LIVE ACTIONS</span>
+            <span style="color: rgba(255,255,255,0.5);">${usdString} MOVED</span>
+          </div>
+        </div>
+      `;
+      if (typeof gsap !== 'undefined') {
+        gsap.killTweensOf(filterCountTooltip);
+        gsap.fromTo(filterCountTooltip, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4 });
+      }
+    }
+  });
+}
+
+
+function triggerArtisticSynthesis(day, dayBlocks) {
+  currentMode = 'ART_SYNTHESIS';
+  pausePlayback();
+  
+  if (!dayBlocks || dayBlocks.length === 0) dayBlocks = generateMockHistoryForDate(`2026-07-${day < 10 ? '0'+day:day}`).slice(0, 1000);
+  
+  // ALGORITHM: Analyze the day's patterns to generate a beautiful, sorted picture
+  let allTxs = [];
+  let counts = { 'Plain Transfer': 0, 'Token Swap': 0, 'NFT Mint': 0, 'Smart Contract': 0 };
+  
+  dayBlocks.forEach(b => {
+    getBlockTransactions(b).forEach(t => {
+      allTxs.push(t);
+      counts[t.type] = (counts[t.type] || 0) + 1;
+    });
+  });
+  
+  // Find dominant pattern
+  let dominantType = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+  
+  // Sort the transactions to create gradients/bands instead of noise
+  allTxs.sort((a, b) => {
+    // Primary sort by type to group colors
+    if (a.type !== b.type) return a.type.localeCompare(b.type);
+    // Secondary sort by value to create intensity gradients within the color bands
+    return (a.valueUsd || 0) - (b.valueUsd || 0);
+  });
+  
+  // Re-pack into a single massive mock block so the draw loop renders them sequentially in the grid
+  blocks = [{
+    block_number: 'SYNTHESIS',
+    transactions: allTxs
+  }];
+  
+  const weatherLine = document.getElementById('cinematic-weather-line');
+  if (weatherLine) weatherLine.style.display = 'none';
+  document.getElementById('archive-drawer').classList.remove('open');
+  document.querySelector('.canvas-container').classList.remove('sidebar-open');
+  
+  // Generate the story text
+  let storyText = "A calm, balanced day on the network.";
+  if (dominantType === 'Token Swap') {
+    storyText = "The fiery orange and pink bands dominate the canvas, visualizing a day of extreme market volatility and heavy coin trading.";
+  } else if (dominantType === 'Plain Transfer') {
+    storyText = "Cool, sweeping gradients reflect a quiet day dominated by simple, peer-to-peer human payments.";
+  } else if (dominantType === 'NFT Mint') {
+    storyText = "Vivid, geometric clusters burst across the canvas, capturing a frenzy of digital art creation.";
+  }
+  
+  let artOverlay = document.getElementById('art-synthesis-overlay');
+  if (!artOverlay) {
+    artOverlay = document.createElement('div');
+    artOverlay.id = 'art-synthesis-overlay';
+    artOverlay.style.position = 'absolute';
+    artOverlay.style.bottom = '80px';
+    artOverlay.style.left = '50%';
+    artOverlay.style.transform = 'translateX(-50%)';
+    artOverlay.style.zIndex = '9000';
+    artOverlay.style.textAlign = 'center';
+    artOverlay.style.color = '#fff';
+    artOverlay.style.pointerEvents = 'none';
+    
+    artOverlay.innerHTML = `
+      <div style="font-family: 'Space Mono', monospace; font-size: 14px; letter-spacing: 0.4em; text-transform: uppercase; margin-bottom: 12px; text-shadow: 0 4px 12px rgba(0,0,0,0.5);">Synthesis Complete</div>
+      <div id="art-portrait-title" style="font-family: 'Outfit', sans-serif; font-size: 32px; font-weight: 300; letter-spacing: 0.1em; margin-bottom: 12px; text-shadow: 0 4px 12px rgba(0,0,0,0.5);">PORTRAIT OF JULY ${day}, 2026</div>
+      <div id="art-portrait-story" style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 300; color: rgba(255,255,255,0.8); max-width: 600px; margin: 0 auto 24px auto; line-height: 1.5; text-shadow: 0 2px 8px rgba(0,0,0,0.8);">${storyText}</div>
+      <button style="pointer-events: auto; padding: 12px 30px; background: #fff; color: #000; border: none; border-radius: 30px; font-family: 'Space Mono', monospace; font-size: 12px; font-weight: bold; text-transform: uppercase; cursor: pointer; letter-spacing: 0.1em; transition: transform 0.2s; box-shadow: 0 8px 24px rgba(0,0,0,0.4);" onclick="location.reload()">Return to Live Grid</button>
+    `;
+    document.body.appendChild(artOverlay);
+  } else {
+    artOverlay.style.display = 'block';
+    document.getElementById('art-portrait-title').textContent = `PORTRAIT OF JULY ${day}, 2026`;
+    document.getElementById('art-portrait-story').textContent = storyText;
+  }
+}
+ + totalUsd.toLocaleString();
+    weatherLine.innerHTML = `<span style="color: #000; text-shadow: none; font-weight: 500; font-size: 24px; padding: 20px; background: rgba(255,255,255,0.9); border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: inline-block;">Today, <strong>${directCount.toLocaleString()}</strong> human payments moved <strong>${volStr}</strong>.<br>The network weather is ${weatherCondition}.</span>`;
   }
 
   if (blocks.length === 0) return;
@@ -2245,9 +4336,9 @@ playbackPlayBtn.addEventListener('click', () => {
 
 // Transition Layouts
 async function loadHistoricalPortrait(dateStr, dayNum) {
-  // HIJACKED FOR ART SYNTHESIS
-  triggerArtisticSynthesis(dayNum);
-  return;
+  lastInteractionTime = Date.now();
+  archiveDrawer.classList.remove('open');
+  pausePlayback();
 
   lastInteractionTime = Date.now();
   archiveDrawer.classList.remove('open');
@@ -2714,21 +4805,61 @@ if (legendEl) {
 }
 
 
-function triggerArtisticSynthesis(day) {
+function triggerArtisticSynthesis(day, dayBlocks) {
   currentMode = 'ART_SYNTHESIS';
+  pausePlayback();
   
-  blocks = generateMockHistoryForDate('2026-09-14').slice(0, 1000);
+  if (!dayBlocks || dayBlocks.length === 0) dayBlocks = generateMockHistoryForDate(`2026-07-${day < 10 ? '0'+day:day}`).slice(0, 1000);
   
-  document.getElementById('massive-dashboard-stats').style.display = 'none';
+  // ALGORITHM: Analyze the day's patterns to generate a beautiful, sorted picture
+  let allTxs = [];
+  let counts = { 'Plain Transfer': 0, 'Token Swap': 0, 'NFT Mint': 0, 'Smart Contract': 0 };
+  
+  dayBlocks.forEach(b => {
+    getBlockTransactions(b).forEach(t => {
+      allTxs.push(t);
+      counts[t.type] = (counts[t.type] || 0) + 1;
+    });
+  });
+  
+  // Find dominant pattern
+  let dominantType = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+  
+  // Sort the transactions to create gradients/bands instead of noise
+  allTxs.sort((a, b) => {
+    // Primary sort by type to group colors
+    if (a.type !== b.type) return a.type.localeCompare(b.type);
+    // Secondary sort by value to create intensity gradients within the color bands
+    return (a.valueUsd || 0) - (b.valueUsd || 0);
+  });
+  
+  // Re-pack into a single massive mock block so the draw loop renders them sequentially in the grid
+  blocks = [{
+    block_number: 'SYNTHESIS',
+    transactions: allTxs
+  }];
+  
+  const weatherLine = document.getElementById('cinematic-weather-line');
+  if (weatherLine) weatherLine.style.display = 'none';
   document.getElementById('archive-drawer').classList.remove('open');
   document.querySelector('.canvas-container').classList.remove('sidebar-open');
+  
+  // Generate the story text
+  let storyText = "A calm, balanced day on the network.";
+  if (dominantType === 'Token Swap') {
+    storyText = "The fiery orange and pink bands dominate the canvas, visualizing a day of extreme market volatility and heavy coin trading.";
+  } else if (dominantType === 'Plain Transfer') {
+    storyText = "Cool, sweeping gradients reflect a quiet day dominated by simple, peer-to-peer human payments.";
+  } else if (dominantType === 'NFT Mint') {
+    storyText = "Vivid, geometric clusters burst across the canvas, capturing a frenzy of digital art creation.";
+  }
   
   let artOverlay = document.getElementById('art-synthesis-overlay');
   if (!artOverlay) {
     artOverlay = document.createElement('div');
     artOverlay.id = 'art-synthesis-overlay';
     artOverlay.style.position = 'absolute';
-    artOverlay.style.bottom = '100px';
+    artOverlay.style.bottom = '80px';
     artOverlay.style.left = '50%';
     artOverlay.style.transform = 'translateX(-50%)';
     artOverlay.style.zIndex = '9000';
@@ -2738,15 +4869,14 @@ function triggerArtisticSynthesis(day) {
     
     artOverlay.innerHTML = `
       <div style="font-family: 'Space Mono', monospace; font-size: 14px; letter-spacing: 0.4em; text-transform: uppercase; margin-bottom: 12px; text-shadow: 0 4px 12px rgba(0,0,0,0.5);">Synthesis Complete</div>
-      <div style="font-family: 'Outfit', sans-serif; font-size: 32px; font-weight: 300; letter-spacing: 0.1em; margin-bottom: 20px; text-shadow: 0 4px 12px rgba(0,0,0,0.5);">PORTRAIT OF JULY ${day}, 2026</div>
+      <div id="art-portrait-title" style="font-family: 'Outfit', sans-serif; font-size: 32px; font-weight: 300; letter-spacing: 0.1em; margin-bottom: 12px; text-shadow: 0 4px 12px rgba(0,0,0,0.5);">PORTRAIT OF JULY ${day}, 2026</div>
+      <div id="art-portrait-story" style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 300; color: rgba(255,255,255,0.8); max-width: 600px; margin: 0 auto 24px auto; line-height: 1.5; text-shadow: 0 2px 8px rgba(0,0,0,0.8);">${storyText}</div>
       <button style="pointer-events: auto; padding: 12px 30px; background: #fff; color: #000; border: none; border-radius: 30px; font-family: 'Space Mono', monospace; font-size: 12px; font-weight: bold; text-transform: uppercase; cursor: pointer; letter-spacing: 0.1em; transition: transform 0.2s; box-shadow: 0 8px 24px rgba(0,0,0,0.4);" onclick="location.reload()">Return to Live Grid</button>
     `;
     document.body.appendChild(artOverlay);
   } else {
     artOverlay.style.display = 'block';
-    artOverlay.querySelector('div:nth-child(2)').textContent = `PORTRAIT OF JULY ${day}, 2026`;
+    document.getElementById('art-portrait-title').textContent = `PORTRAIT OF JULY ${day}, 2026`;
+    document.getElementById('art-portrait-story').textContent = storyText;
   }
-  
-  // Force one draw call
-  draw();
 }
