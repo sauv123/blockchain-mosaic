@@ -2646,3 +2646,94 @@ body.focus-mode #mosaic-canvas {
   animation: cinematic-breathe 8s ease-in-out infinite;
 }
 
+
+
+/* ============================================================
+   MICRO-INTERACTION & PREMIUM UI UPGRADES
+   ============================================================ */
+
+/* Cinematic Film Grain Overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background-image: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)"/%3E%3C/svg%3E');
+  opacity: 0.03;
+  mix-blend-mode: overlay;
+}
+
+/* Base button setup for magnetic effect */
+.app-header button {
+  will-change: transform;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Smooth tooltips */
+#hover-tooltip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  /* Remove GSAP conflict transitions */
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+  transform-origin: top left;
+  border-radius: 12px !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
+  background: rgba(12, 14, 18, 0.75) !important;
+  backdrop-filter: blur(24px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(150%) !important;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.1) !important;
+  padding: 16px !important;
+}
+
+/* Hover state overrides */
+#hover-tooltip.visible {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* Better Details Sidebar / Archive Drawer Glass */
+.details-sidebar, .archive-drawer {
+  background: rgba(12, 14, 18, 0.85) !important;
+  backdrop-filter: blur(30px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(180%) !important;
+  border-left: 1px solid rgba(255,255,255,0.1) !important;
+  box-shadow: -20px 0 60px rgba(0,0,0,0.5) !important;
+}
+
+
+/* ============================================================
+   CUSTOM CURSOR
+   ============================================================ */
+/* Hide default cursor on interactive areas */
+body, button, a, canvas, select {
+  cursor: none !important;
+}
+
+#custom-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  background-color: #fff;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 10000;
+  mix-blend-mode: difference;
+  transform: translate(-50%, -50%);
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), 
+              height 0.3s cubic-bezier(0.16, 1, 0.3, 1), 
+              background-color 0.3s ease, 
+              border 0.3s ease;
+}
+
+#custom-cursor.hovering {
+  width: 32px;
+  height: 32px;
+  background-color: transparent;
+  border: 1px solid rgba(255,255,255,0.8);
+}

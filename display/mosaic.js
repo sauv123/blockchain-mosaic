@@ -1055,7 +1055,8 @@ function generateSimulatedBlock() {
   
   incomingBlockNum = blockNum;
   incomingBlockStartTime = Date.now();
-  blocks.push(newBlock); if (typeof audio !== 'undefined' && currentMode !== 'ART_SYNTHESIS') audio.playBlockTones(newBlock);
+  newBlock._liveMintedTime = Date.now();
+              blocks.push(newBlock); if (typeof audio !== 'undefined' && currentMode !== 'ART_SYNTHESIS') audio.playBlockTones(newBlock);
   
   let currentCapacity = cols * rows;
   if (blocks.length > currentCapacity) {
@@ -1460,6 +1461,15 @@ function drawTile(ctx, x, y, size, block, blockInterval, alpha, theme, isTracked
     if (block.whale_flag === 1 && (idx === whaleIndex1 || idx === whaleIndex2)) {
       ctx.fillStyle = `rgba(255, 255, 255, ${finalOpacity})`;
     } else {
+      // Micro-interaction: Flash bright white on newly minted blocks (last 2 seconds)
+      let flashOverlay = 0;
+      if (currentMode === 'LIVE' && block._liveMintedTime) {
+        const age = Date.now() - block._liveMintedTime;
+        if (age < 800) {
+          flashOverlay = 1.0 - (age / 800); // Fades out over 800ms
+        }
+      }
+
       if (isDimmed) {
         ctx.fillStyle = 'rgba(255,255,255,0.02)';
         ctx.shadowBlur = 0;
@@ -1480,9 +1490,14 @@ function drawTile(ctx, x, y, size, block, blockInterval, alpha, theme, isTracked
           ctx.fillStyle = 'rgba(255,255,255,0.4)';
           ctx.fillRect(x + cell.col * subSize + 1.5, y + cell.row * subSize + 1.5, subSize - 3, subSize - 3);
         } else {
-          ctx.shadowBlur = 2;
-          ctx.shadowColor = baseColor;
+          ctx.shadowBlur = flashOverlay > 0 ? 10 * flashOverlay : 2;
+          ctx.shadowColor = flashOverlay > 0 ? '#ffffff' : baseColor;
           ctx.fillRect(x + cell.col * subSize + 0.5, y + cell.row * subSize + 0.5, subSize - 1, subSize - 1);
+          
+          if (flashOverlay > 0) {
+             ctx.fillStyle = `rgba(255, 255, 255, ${flashOverlay * 0.8})`;
+             ctx.fillRect(x + cell.col * subSize + 0.5, y + cell.row * subSize + 0.5, subSize - 1, subSize - 1);
+          }
         }
       }
     }
@@ -1559,6 +1574,7 @@ function connectRelay() {
             if (currentMode === 'LIVE' && currentChain === 'ethereum') {
               incomingBlockNum = newBlock.block_number;
               incomingBlockStartTime = Date.now();
+              newBlock._liveMintedTime = Date.now();
               blocks.push(newBlock); if (typeof audio !== 'undefined' && currentMode !== 'ART_SYNTHESIS') audio.playBlockTones(newBlock);
 
               let currentCapacity = cols * rows;
@@ -1643,7 +1659,8 @@ function connectRelay() {
         if (currentMode === 'LIVE' && currentChain === 'ethereum') {
           incomingBlockNum = newBlock.block_number;
           incomingBlockStartTime = Date.now();
-          blocks.push(newBlock); if (typeof audio !== 'undefined' && currentMode !== 'ART_SYNTHESIS') audio.playBlockTones(newBlock);
+          newBlock._liveMintedTime = Date.now();
+              blocks.push(newBlock); if (typeof audio !== 'undefined' && currentMode !== 'ART_SYNTHESIS') audio.playBlockTones(newBlock);
           
           let currentCapacity = cols * rows;
           if (blocks.length > currentCapacity) {
@@ -1947,8 +1964,20 @@ function updateTooltip(block, e) {
     </div>
   `;
 
-  hoverTooltip.style.left = `${e.pageX}px`;
-  hoverTooltip.style.top = `${e.pageY}px`;
+  // GSAP Spring Tooltip Interpolation
+  if (typeof gsap !== 'undefined') {
+    // Add an offset so cursor doesn't obscure it
+    gsap.to(hoverTooltip, { 
+      x: e.clientX + 20, 
+      y: e.clientY + 20, 
+      duration: 0.5, 
+      ease: 'power3.out',
+      overwrite: 'auto'
+    });
+  } else {
+    hoverTooltip.style.left = `${e.clientX + 20}px`;
+    hoverTooltip.style.top = `${e.clientY + 20}px`;
+  }
   hoverTooltip.classList.add('visible');
 }
 
@@ -2962,4 +2991,88 @@ function triggerArtisticSynthesis(day, dayBlocks) {
     document.getElementById('art-portrait-title').textContent = `PORTRAIT OF JULY ${day}, 2026`;
     document.getElementById('art-portrait-story').textContent = storyText;
   }
+}
+
+
+// ----------------------------------------------------
+// MICRO-INTERACTION: Magnetic Buttons
+// ----------------------------------------------------
+function initMagneticButtons() {
+  const buttons = document.querySelectorAll('header button, #archive-toggle-btn, #theme-toggle-btn');
+  buttons.forEach(btn => {
+    btn.addEventListener('mouseenter', () => {
+      if (typeof audio !== 'undefined') audio.playUIHoverTick();
+    });
+    btn.addEventListener('mousemove', (e) => {
+      const rect = btn.getBoundingClientRect();
+      // Calculate cursor position relative to button center
+      const x = (e.clientX - rect.left - rect.width / 2) * 0.4;
+      const y = (e.clientY - rect.top - rect.height / 2) * 0.4;
+      
+      if (typeof gsap !== 'undefined') {
+        gsap.to(btn, { x: x, y: y, duration: 0.3, ease: 'power2.out' });
+      } else {
+        btn.style.transform = `translate(${x}px, ${y}px)`;
+      }
+    });
+    
+    btn.addEventListener('mouseleave', () => {
+      if (typeof gsap !== 'undefined') {
+        gsap.to(btn, { x: 0, y: 0, duration: 0.7, ease: 'elastic.out(1, 0.3)' });
+      } else {
+        btn.style.transform = `translate(0px, 0px)`;
+      }
+    });
+  });
+}
+
+// Ensure it runs after DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initMagneticButtons);
+} else {
+  initMagneticButtons();
+}
+
+// ----------------------------------------------------
+// MICRO-INTERACTION: Custom Cursor
+// ----------------------------------------------------
+function initCustomCursor() {
+  const cursor = document.createElement('div');
+  cursor.id = 'custom-cursor';
+  document.body.appendChild(cursor);
+
+  let mouseX = window.innerWidth / 2;
+  let mouseY = window.innerHeight / 2;
+
+  // Track raw mouse position instantly
+  window.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+    cursor.style.left = mouseX + 'px';
+    cursor.style.top = mouseY + 'px';
+    
+    // Check if hovering over interactive element
+    const hoveredEl = document.elementFromPoint(mouseX, mouseY);
+    if (hoveredEl && (
+      hoveredEl.tagName === 'BUTTON' || 
+      hoveredEl.tagName === 'A' || 
+      hoveredEl.tagName === 'SELECT' ||
+      hoveredEl.closest('button') ||
+      (hoveredEl.id === 'mosaic-canvas' && hoveredBlock !== null)
+    )) {
+      cursor.classList.add('hovering');
+    } else {
+      cursor.classList.remove('hovering');
+    }
+  });
+  
+  // Hide cursor when leaving window
+  document.addEventListener('mouseleave', () => cursor.style.opacity = '0');
+  document.addEventListener('mouseenter', () => cursor.style.opacity = '1');
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initCustomCursor);
+} else {
+  initCustomCursor();
 }
