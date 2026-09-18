@@ -2636,14 +2636,10 @@ body.focus-mode #mosaic-canvas {
    ============================================================ */
 
 /* Breathing animation for the weather line */
-@keyframes cinematic-breathe {
-  0% { transform: translate(-50%, -50%) scale(1) translateY(0); filter: drop-shadow(0 4px 20px rgba(0,0,0,0.3)); }
-  50% { transform: translate(-50%, -50%) scale(1.01) translateY(-2px); filter: drop-shadow(0 8px 30px rgba(0,0,0,0.5)); }
-  100% { transform: translate(-50%, -50%) scale(1) translateY(0); filter: drop-shadow(0 4px 20px rgba(0,0,0,0.3)); }
-}
+
 
 #cinematic-weather-line {
-  animation: cinematic-breathe 8s ease-in-out infinite;
+  
 }
 
 
@@ -2659,7 +2655,9 @@ body::before {
   inset: 0;
   z-index: 9999;
   pointer-events: none;
-  background-image: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)"/%3E%3C/svg%3E');
+  background-image: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="1" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)"/%3E%3C/svg%3E');
+  opacity: 0.04;
+  /* Removed mix-blend-mode overlay for massive GPU relief */
   opacity: 0.03;
   mix-blend-mode: overlay;
 }
@@ -2715,8 +2713,8 @@ body, button, a, canvas, select {
 
 #custom-cursor {
   position: fixed;
-  top: 0;
-  left: 0;
+  top: -4px;
+  left: -4px;
   width: 8px;
   height: 8px;
   background-color: #fff;
@@ -2724,16 +2722,20 @@ body, button, a, canvas, select {
   pointer-events: none;
   z-index: 10000;
   mix-blend-mode: difference;
-  transform: translate(-50%, -50%);
-  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), 
-              height 0.3s cubic-bezier(0.16, 1, 0.3, 1), 
-              background-color 0.3s ease, 
-              border 0.3s ease;
+  will-change: transform, width, height;
+  transition: width 0.2s cubic-bezier(0.16, 1, 0.3, 1), 
+              height 0.2s cubic-bezier(0.16, 1, 0.3, 1), 
+              background-color 0.2s ease, 
+              border 0.2s ease,
+              top 0.2s ease,
+              left 0.2s ease;
 }
 
 #custom-cursor.hovering {
   width: 32px;
   height: 32px;
+  top: -16px;
+  left: -16px;
   background-color: transparent;
   border: 1px solid rgba(255,255,255,0.8);
 }

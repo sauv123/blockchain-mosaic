@@ -1490,7 +1490,7 @@ function drawTile(ctx, x, y, size, block, blockInterval, alpha, theme, isTracked
           ctx.fillStyle = 'rgba(255,255,255,0.4)';
           ctx.fillRect(x + cell.col * subSize + 1.5, y + cell.row * subSize + 1.5, subSize - 3, subSize - 3);
         } else {
-          ctx.shadowBlur = flashOverlay > 0 ? 10 * flashOverlay : 2;
+          ctx.shadowBlur = flashOverlay > 0 ? 15 * flashOverlay : 0; // optimized: disabled continuous 2px blur
           ctx.shadowColor = flashOverlay > 0 ? '#ffffff' : baseColor;
           ctx.fillRect(x + cell.col * subSize + 0.5, y + cell.row * subSize + 0.5, subSize - 1, subSize - 1);
           
@@ -1853,6 +1853,18 @@ function updateStats() {
         </div>
       `;
       weatherLine.setAttribute('data-initialized', 'true');
+      
+      // Inject hardware-accelerated breathing animation
+      if (typeof gsap !== 'undefined') {
+        gsap.to(weatherLine, {
+          y: -4,
+          duration: 4,
+          repeat: -1,
+          yoyo: true,
+          ease: 'sine.inOut',
+          force3D: true
+        });
+      }
     }
 
     if (changed && typeof gsap !== 'undefined') {
@@ -3034,41 +3046,40 @@ if (document.readyState === 'loading') {
 }
 
 // ----------------------------------------------------
-// MICRO-INTERACTION: Custom Cursor
+// MICRO-INTERACTION: Custom Cursor (High Performance GSAP)
 // ----------------------------------------------------
 function initCustomCursor() {
   const cursor = document.createElement('div');
   cursor.id = 'custom-cursor';
   document.body.appendChild(cursor);
 
-  let mouseX = window.innerWidth / 2;
-  let mouseY = window.innerHeight / 2;
+  // Use GSAP quickSetter for buttery smooth 120fps hardware acceleration
+  const xSetter = gsap.quickSetter(cursor, "x", "px");
+  const ySetter = gsap.quickSetter(cursor, "y", "px");
 
-  // Track raw mouse position instantly
   window.addEventListener('mousemove', (e) => {
-    mouseX = e.clientX;
-    mouseY = e.clientY;
-    cursor.style.left = mouseX + 'px';
-    cursor.style.top = mouseY + 'px';
+    xSetter(e.clientX);
+    ySetter(e.clientY);
     
-    // Check if hovering over interactive element
-    const hoveredEl = document.elementFromPoint(mouseX, mouseY);
-    if (hoveredEl && (
-      hoveredEl.tagName === 'BUTTON' || 
-      hoveredEl.tagName === 'A' || 
-      hoveredEl.tagName === 'SELECT' ||
-      hoveredEl.closest('button') ||
-      (hoveredEl.id === 'mosaic-canvas' && hoveredBlock !== null)
-    )) {
-      cursor.classList.add('hovering');
-    } else {
-      cursor.classList.remove('hovering');
+    // Debounce/Throttle the elementFromPoint check slightly for performance
+    if (e.clientX % 2 === 0) {
+        const hoveredEl = document.elementFromPoint(e.clientX, e.clientY);
+        if (hoveredEl && (
+          hoveredEl.tagName === 'BUTTON' || 
+          hoveredEl.tagName === 'A' || 
+          hoveredEl.tagName === 'SELECT' ||
+          hoveredEl.closest('button') ||
+          (hoveredEl.id === 'mosaic-canvas' && hoveredBlock !== null)
+        )) {
+          cursor.classList.add('hovering');
+        } else {
+          cursor.classList.remove('hovering');
+        }
     }
   });
   
-  // Hide cursor when leaving window
-  document.addEventListener('mouseleave', () => cursor.style.opacity = '0');
-  document.addEventListener('mouseenter', () => cursor.style.opacity = '1');
+  document.addEventListener('mouseleave', () => gsap.to(cursor, {opacity: 0, duration: 0.2}));
+  document.addEventListener('mouseenter', () => gsap.to(cursor, {opacity: 1, duration: 0.2}));
 }
 
 if (document.readyState === 'loading') {
