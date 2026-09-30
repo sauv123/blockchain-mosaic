@@ -1,2 +1,7 @@
 node_modules/
 .env
+display/trace_vr.html
+display/trace_vr.js
+display/quest.html
+display/quest.js
+display/xr*.html
