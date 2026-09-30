@@ -100,16 +100,7 @@ const PALETTES = {
 
 // Themes
 const THEMES = {
-  warmGray: {
-    bg: '#c8c6c0',
-    tileBg: '#bdbcba',
-    accent: 'hsl(220, 75%, 45%)',
-    text: '#222220',
-    gridLine: 'rgba(34, 34, 32, 0.12)',
-    accentLight: '#ffffff',
-    graphNode: '#3b6fd4',
-    graphText: '#222220'
-  },
+  
   charcoal: {
     bg: '#14140f',
     tileBg: '#1e1e19',
@@ -121,7 +112,7 @@ const THEMES = {
     graphText: '#e2e2da'
   }
 };
-let currentTheme = 'warmGray';
+let currentTheme = 'charcoal';
 
 // Audio Sonification Engine (Native Web Audio API)
 class AudioEngine {
