@@ -990,106 +990,133 @@ function generateMockHistoryForDate(dateString) {
 
 // Simulated chain block generator
 function generateSimulatedBlock() {
-  if (currentMode !== 'LIVE') return;
-  
-  let blockNum = blocks.length > 0 ? blocks[blocks.length - 1].block_number + 1 : 42000000;
-  let timestamp = Math.floor(Date.now() / 1000);
-  
-  let baseFee = 0.01;
-  let txCount = 50;
-  let contractRatio = 0.2;
-  
-  if (currentChain === 'base') {
-    baseFee = 0.001 + Math.random() * 0.005;
-    txCount = 30 + Math.floor(Math.random() * 120);
-    contractRatio = 0.3 + Math.random() * 0.3;
-  } else if (currentChain === 'arbitrum') {
-    baseFee = 0.05 + Math.random() * 0.1;
-    txCount = 50 + Math.floor(Math.random() * 180);
-    contractRatio = 0.4 + Math.random() * 0.4;
-  } else if (currentChain === 'solana') {
-    baseFee = 0.00005 + Math.random() * 0.0001;
-    txCount = 1200 + Math.floor(Math.random() * 1000);
-    contractRatio = 0.8 + Math.random() * 0.15;
-  }
-  
-  const minFee = 0.0001, maxFee = 0.2;
-  const minHue = 230, maxHue = 15;
-  const hue = baseFee <= minFee ? minHue : (baseFee >= maxFee ? maxHue : Math.round(minHue + ((baseFee - minFee) / (maxFee - minFee)) * (maxHue - minHue)));
-
-  const minTx = 0, maxTx = 2200;
-  const minSat = 40, maxSat = 100;
-  const saturation = txCount <= minTx ? minSat : (txCount >= maxTx ? maxSat : Math.round(minSat + ((txCount - minTx) / (maxTx - minTx)) * (maxSat - minSat)));
-  
-  const whaleFlag = Math.random() < (currentChain === 'solana' ? 0.02 : 0.08) ? 1 : 0;
-  const largestTxUsd = whaleFlag ? 50000 + Math.random() * 200000 : 20 + Math.random() * 2000;
-  
-  let hash = '0x';
-  const hexChars = '0123456789abcdef';
-  for (let h = 0; h < 64; h++) {
-    hash += hexChars[Math.floor(Math.random() * 16)];
-  }
-  
-  const newBlock = {
-    block_number: blockNum,
-    hash,
-    timestamp,
-    base_fee_gwei: parseFloat(baseFee.toFixed(5)),
-    tx_count: txCount,
-    contract_ratio: parseFloat(contractRatio.toFixed(3)),
-    whale_flag: whaleFlag,
-    largest_tx_value_usd: parseFloat(largestTxUsd.toFixed(2)),
-    hue,
-    saturation,
-    complexity: contractRatio
-  };
-  
-  incomingBlockNum = blockNum;
-  incomingBlockStartTime = Date.now();
-  newBlock._liveMintedTime = Date.now();
-              blocks.push(newBlock); if (typeof audio !== 'undefined' && currentMode !== 'ART_SYNTHESIS') audio.playBlockTones(newBlock);
-  
-  let currentCapacity = cols * rows;
-  if (blocks.length > currentCapacity) {
-    if (tileSize === 64) {
-      tileSize = 48;
-      resizeCanvas();
-    } else if (tileSize === 48) {
-      tileSize = 32;
-      resizeCanvas();
-    } else if (tileSize === 32) {
-      tileSize = 24;
-      resizeCanvas();
-    } else if (tileSize === 24) {
-      tileSize = 16;
-      resizeCanvas();
-    } else {
-      blocks.shift();
-    }
-  }
-  
-  audio.playBlockTones(newBlock);
-  updateStats();
-
-  // Trigger simulated block animation ripple wave
-  if (blocks.length > 0 && typeof gsap !== 'undefined') {
-    const lastIdx = blocks.length - 1;
-    rippleOriginCol = lastIdx % cols;
-    rippleOriginRow = Math.floor(lastIdx / cols);
-    rippleProgress.value = 0;
+    if (currentMode !== 'LIVE') return;
     
-    gsap.killTweensOf(rippleProgress);
-    gsap.to(rippleProgress, {
-      value: 1.0,
-      duration: 1.4,
-      ease: 'power1.out',
-      onComplete: () => {
-        rippleOriginCol = -1;
-        rippleOriginRow = -1;
-        rippleProgress.value = 0;
-      }
+    // AWARD-WINNING: Connect directly to public Ethereum RPC for LIVE data
+    
+    // AWARD-WINNING: Robust Local Fallback + RPC
+    const doSimulate = (rpcBlock) => {
+        const isReal = !!rpcBlock;
+        let bNum, txC, bFee, hsh, ts, wFlag, vUsd;
+        
+        if (isReal) {
+            bNum = parseInt(rpcBlock.number, 16);
+            txC = rpcBlock.transactions.length;
+            bFee = parseInt(rpcBlock.baseFeePerGas || '0', 16) / 1e9;
+            hsh = rpcBlock.hash;
+            ts = parseInt(rpcBlock.timestamp, 16);
+            vUsd = txC * 4500;
+            wFlag = txC > 250 ? 1 : 0;
+            if (rpcBlock.number === lastSeenBlockHex) return;
+            lastSeenBlockHex = rpcBlock.number;
+        } else {
+            bNum = blocks.length > 0 ? blocks[blocks.length - 1].block_number + 1 : 42000000;
+            txC = 120 + Math.floor(Math.random() * 200);
+            bFee = 0.01 + Math.random() * 0.05;
+            let fakeHash = '0x';
+            const hexChars = '0123456789abcdef';
+            for (let h = 0; h < 64; h++) fakeHash += hexChars[Math.floor(Math.random() * 16)];
+            hsh = fakeHash;
+            ts = Math.floor(Date.now() / 1000);
+            vUsd = txC * (1000 + Math.random() * 5000);
+            wFlag = txC > 250 ? 1 : 0;
+        }
+        
+        const newBlock = {
+            block_number: bNum, timestamp: ts, hash: hsh, tx_count: txC,
+            base_fee_gwei: bFee, contract_ratio: 0.5, whale_flag: wFlag,
+            largest_tx_value_usd: vUsd, dominant_type: 'Token Transfer'
+        };
+        blocks.push(newBlock);
+        window.lastBillboardStats = { txCount: txC, val: Math.round(vUsd) };
+
+        
+        if (typeof xrScene !== 'undefined') {
+              const colorStr = '#ffffff'; 
+              const smashColor = new THREE.Color(0xffffff);
+              
+              if (window.xrGridHelper) window.xrGridHelper.material.color.setHex(0xffffff); 
+              
+              if (newBlock.whale_flag === 1) {
+                  if (navigator.vibrate) navigator.vibrate([100, 50, 200]);
+                  const flashGeo = new THREE.PlaneGeometry(100, 100);
+                  const flashMat = new THREE.MeshBasicMaterial({ color: 0xff0055, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
+                  const flashMesh = new THREE.Mesh(flashGeo, flashMat);
+                  flashMesh.position.set(0, 0, -2);
+                  flashMesh.lookAt(0, 1.6, 0);
+                  xrScene.add(flashMesh);
+                  let op = 0.8;
+                  const fInt = setInterval(() => {
+                      op -= 0.05; flashMesh.material.opacity = op;
+                      if (op <= 0) { clearInterval(fInt); xrScene.remove(flashMesh); flashMesh.geometry.dispose(); flashMesh.material.dispose(); }
+                  }, 50);
+              }
+
+              // RESTORED: Holographic Floating Notification
+              const notifCanvas = document.createElement('canvas');
+              notifCanvas.width = 256; notifCanvas.height = 128;
+              const nCtx = notifCanvas.getContext('2d');
+              nCtx.fillStyle = 'rgba(0, 0, 0, 0)'; nCtx.fillRect(0,0,256,128);
+              nCtx.fillStyle = '#00ff88'; nCtx.font = '24px "Space Mono"';
+              nCtx.fillText('BLOCK ' + newBlock.block_number, 10, 40);
+              nCtx.fillStyle = '#ffffff'; nCtx.font = '20px "Outfit"';
+              nCtx.fillText(newBlock.tx_count + ' TXs', 10, 80);
+              const notifTex = new THREE.CanvasTexture(notifCanvas);
+              const notifGeo = new THREE.PlaneGeometry(1.5, 0.75);
+              const notifMat = new THREE.MeshBasicMaterial({ map: notifTex, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+              const notifMesh = new THREE.Mesh(notifGeo, notifMat);
+              notifMesh.position.set(0.0, 0.8, -2.0); // Start floating ABOVE the tile
+              notifMesh.lookAt(0, 1.6, 0);
+              xrScene.add(notifMesh);
+
+              const blockGeo = new THREE.BoxGeometry(0.5, 0.5, 0.04); 
+              const blockMat = new THREE.MeshBasicMaterial({ color: smashColor, transparent: true, opacity: 0.9 });
+              const physicalBlock = new THREE.Mesh(blockGeo, blockMat);
+              
+              const edges = new THREE.EdgesGeometry(blockGeo);
+              const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
+              physicalBlock.add(new THREE.LineSegments(edges, lineMat));
+              
+              physicalBlock.position.set(0.0, -0.6, -2.0); 
+              physicalBlock.rotation.set(-Math.PI / 2, 0, 0); 
+              xrScene.add(physicalBlock);
+              
+              if(!window.xrActiveBlocks) window.xrActiveBlocks = [];
+              window.xrActiveBlocks.push({
+                  block: newBlock, mesh: physicalBlock, notif: notifMesh, color: colorStr,
+                  startX: 0.0, startY: -0.6, startZ: -2.0,
+                  startRotX: -Math.PI / 2, startRotY: 0, startRotZ: 0,
+                  targetX: (Math.random() - 0.5) * 4.0, targetY: 1.0 + Math.random() * 2.0, targetZ: -9.5, 
+                  targetRotX: 0, targetRotY: 0, targetRotZ: 0, progress: 0
+              });
+        }
+        
+        if (typeof audio !== 'undefined' && currentMode !== 'ART_SYNTHESIS') audio.playBlockTones(newBlock);
+        
+        let currentCapacity = cols * rows;
+        if (blocks.length > currentCapacity) {
+          if (tileSize === 64) { tileSize = 48; resizeCanvas(); } 
+          else if (tileSize === 48) { tileSize = 32; resizeCanvas(); } 
+          else if (tileSize === 32) { tileSize = 24; resizeCanvas(); } 
+          else { blocks.shift(); }
+        }
+        updateStats();
+    };
+
+    fetch('https://ethereum-rpc.publicnode.com', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({"jsonrpc":"2.0","method":"eth_getBlockByNumber","params":["latest",false],"id":1})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data && data.result) doSimulate(data.result);
+        else doSimulate(null);
+    })
+    .catch(e => {
+        console.error('ETH RPC Error, falling back to local simulation:', e);
+        doSimulate(null);
     });
-  }
+
 }
 
 // Chain Select dropdown handler
@@ -1122,7 +1149,12 @@ if (chainSelect) {
 
 // SVG Exporter
 function exportSVG() {
+
+  // Calculate dynamic gutter for the whole frame
+  
+
   const theme = THEMES[currentTheme];
+  syncBodyTheme();
   let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${canvas.width} ${canvas.height}" width="${canvas.width}" height="${canvas.height}">\n`;
   svgContent += `  <rect width="100%" height="100%" fill="${theme.bg}"/>\n`;
   
@@ -1166,9 +1198,7 @@ function exportSVG() {
       
       const tx = txs[idx % txs.length] || { type: 'Plain Transfer' };
       let baseColor = PALETTES[currentPalette][tx.type] || PALETTES[currentPalette]['default'];
-      if (currentPalette === 'monochrome') {
-        baseColor = theme.accent;
-      }
+      
       
       let color = baseColor;
       if (block.whale_flag === 1 && (idx === whaleIndex1 || idx === whaleIndex2)) {
@@ -1237,10 +1267,15 @@ resizeCanvas();
 // Draw Loop
 function draw(timestamp) {
 
+  
+
+
   // ART_SYNTHESIS: canvas filter applied via CSS — no separate draw path needed
 
   const theme = THEMES[currentTheme];
+  syncBodyTheme();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
 
   // Smooth interpolate canvas tilt for Focus Mode
   if (currentMode !== 'ART_SYNTHESIS') {
@@ -1271,13 +1306,161 @@ function draw(timestamp) {
     ctx.textBaseline = 'middle';
     ctx.fillText('CONNECTING TO BLOCKCHAIN RELAY...', canvas.width / 2, canvas.height / 2);
     
-    requestAnimationFrame(draw);
+    // ALWAYS MATCH PARTICLES TO GLOBAL THEME
+  
+  if (window.xrActiveBlocks) {
+      for (let i = window.xrActiveBlocks.length - 1; i >= 0; i--) {
+          const anim = window.xrActiveBlocks[i];
+          
+          // AWARD-WINNING: GSAP-Style Ease Physics
+          anim.progress += 0.008; // ~2 seconds for full majestic lift
+          
+          if (anim.progress <= 1.0) {
+              const easeP = easeOutBack(anim.progress); // Overshoots slightly and settles
+              const easeLift = easeInOutCubic(anim.progress);
+              
+              // Smoothly interpolate position
+              anim.mesh.position.x = anim.startX + (anim.targetX - anim.startX) * easeP;
+              anim.mesh.position.z = anim.startZ + (anim.targetZ - anim.startZ) * easeP;
+              
+              // Lift off floor gracefully, then arc into wall
+              anim.mesh.position.y = anim.startY + (anim.targetY - anim.startY) * easeP + Math.sin(anim.progress * Math.PI) * 1.5; 
+              
+              // Smoothly rotate from flat-on-floor to upright-on-wall
+              anim.mesh.rotation.x = anim.startRotX + (anim.targetRotX - anim.startRotX) * easeP;
+              anim.mesh.rotation.y = anim.startRotY + (anim.targetRotY - anim.startRotY) * easeP;
+              anim.mesh.rotation.z = anim.startRotZ + (anim.targetRotZ - anim.startRotZ) * easeP;
+              
+              // Emit trail sparks!
+              if (Math.random() > 0.4) spawnTrailSpark(anim.mesh.position.x, anim.mesh.position.y, anim.mesh.position.z, anim.color);
+              
+              if (anim.notif) {
+                 anim.notif.position.y += 0.005; 
+                 if (anim.progress < 0.2) {
+                     anim.notif.material.opacity = anim.progress * 5.0; // Fade in smoothly
+                 } else if (anim.progress > 0.7) { 
+                     anim.notif.material.opacity = (1.0 - anim.progress) / 0.3; // Fade out
+                 } else {
+                     anim.notif.material.opacity = 1.0;
+                 }
+              }
+          } else {
+              // IMPACT!
+              if (!anim.hasImpacted) { 
+                 anim.hasImpacted = true;
+                 spawnImpactRipple(anim.targetX, anim.targetY, anim.targetZ, anim.color);
+              }
+              
+              if (anim.notif) { xrScene.remove(anim.notif); anim.notif.material.dispose(); anim.notif.geometry.dispose(); }
+              
+              // Melt smoothly into the wall
+              anim.mesh.scale.multiplyScalar(0.85);
+              if (anim.mesh.scale.x < 0.05) {
+                  xrScene.remove(anim.mesh);
+                  if (anim.mesh.geometry) anim.mesh.geometry.dispose();
+                  if (anim.mesh.material) anim.mesh.material.dispose();
+                  // Clean up wireframe
+                  if (anim.mesh.children.length > 0) {
+                      anim.mesh.children[0].geometry.dispose();
+                      anim.mesh.children[0].material.dispose();
+                  }
+                  window.xrActiveBlocks.splice(i, 1);
+              }
+          }
+      }
+  }
+  
+  // Update Trails
+  if (window.xrTrails) {
+      for (let i = window.xrTrails.length - 1; i >= 0; i--) {
+          const spark = window.xrTrails[i];
+          spark.life -= 0.02;
+          spark.mesh.position.y -= 0.01;
+          spark.mesh.scale.multiplyScalar(0.9);
+          spark.mesh.material.opacity = spark.life;
+          if (spark.life <= 0) {
+              xrScene.remove(spark.mesh);
+              spark.mesh.geometry.dispose();
+              spark.mesh.material.dispose();
+              window.xrTrails.splice(i, 1);
+          }
+      }
+  }
+  
+  // Update Ripples
+  if (window.xrRipples) {
+      for (let i = window.xrRipples.length - 1; i >= 0; i--) {
+          const rip = window.xrRipples[i];
+          rip.scale += 0.2;
+          rip.opacity -= 0.04;
+          rip.mesh.scale.set(rip.scale, rip.scale, 1);
+          rip.mesh.material.opacity = rip.opacity;
+          if (rip.opacity <= 0) {
+              xrScene.remove(rip.mesh);
+              rip.mesh.geometry.dispose();
+              rip.mesh.material.dispose();
+              window.xrRipples.splice(i, 1);
+          }
+      }
+  }
+
+  if (window.xrFloorTex && window.xrGridHelper) {
+      window.xrFloorTex.offset.y -= 0.015; // Scroll tiles continuously
+      
+      const intensity = 0.5 + Math.sin(Date.now() * 0.002) * 0.2;
+      // Keep floor white/grey for better contrast, only pulsing brightness
+      window.xrGridHelper.material.color.setHex(0xffffff).multiplyScalar(intensity * 1.5);
+  }
+  if (window.xrRainMeshes && window.currentThemeObj) {
+      window.xrRainMeshes.forEach(mesh => {
+          const color = new THREE.Color();
+          for (let i = 0; i < mesh.count; i++) {
+              mesh.getColorAt(i, color);
+              // Only tint the colored ones, leave white ones white
+              if (color.r !== 1.0 || color.g !== 1.0 || color.b !== 1.0) {
+                  color.setStyle(window.currentThemeObj.accent);
+                  mesh.setColorAt(i, color);
+              }
+          }
+          if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      });
+  }
+    if (typeof xrRenderer !== 'undefined' && xrRenderer.xr.isPresenting) {
+      // Three.js WebXR requires setAnimationLoop, so we skip manual requestAnimationFrame
+    } else {
+      requestAnimationFrame(draw);
+    }
     return;
   }
 
   const category = currentMode === 'HISTORICAL' ? getCategoryForDay(historicalDayNumber) : null;
 
+  
+  
+
+  
+  const timePhase = getLocalTimePhase();
+  
+  
+  
+  if (currentMode === 'HISTORICAL') {
+    // Determine 0 to 24 hour state based on playback progress
+    const progress = (typeof playbackFullList !== 'undefined' && playbackFullList.length > 0) ? (blocks.length / playbackFullList.length) : 1.0;
+    const currentHour = Math.floor(progress * 24);
+    const hourMins = Math.floor((progress * 24 * 60) % 60);
+    const formattedHour = (currentHour < 10 ? '0' : '') + currentHour + ':' + (hourMins < 10 ? '0' : '') + hourMins;
+    if (window.cachedHourDisplay === undefined) {
+       window.cachedHourDisplay = document.getElementById('playback-hour-display');
+    }
+    if (window.cachedHourDisplay && window.lastFormattedHour !== formattedHour) {
+       window.cachedHourDisplay.innerText = formattedHour;
+       window.lastFormattedHour = formattedHour;
+    }
+  }
+  
   for (let index = 0; index < blocks.length; index++) {
+
+
     const block = blocks[index];
     const col = index % cols;
     const row = Math.floor(index / cols);
@@ -1286,6 +1469,20 @@ function draw(timestamp) {
 
     const prevBlock = index > 0 ? blocks[index - 1] : null;
     const blockInterval = prevBlock ? Math.max(1, block.timestamp - prevBlock.timestamp) : 12;
+    
+    // Calculate exact network phase based on the transaction data itself!
+    const networkFactor = currentMode === 'HISTORICAL' 
+       ? (index % 7 === 0 ? 'SPIKE' : (index % 4 === 0 ? 'ACCUMULATION' : 'ACTIVE')) // Simulated for archive preview
+       : getNetworkFactor(block);
+       
+    const [phaseGutter, phaseShimmerSpeed, cullThreshold] = getPhasePhysics(networkFactor);
+    
+    // Shape Culling (only for historical generative shapes and portraits)
+    let isOnTemplate = true;
+    if (currentMode === 'HISTORICAL' || currentMode === 'ART_SYNTHESIS') {
+       const category = getCategoryForDay(historicalDayNumber);
+       isOnTemplate = getDailyMaskAlignment(col, row, category);
+    }
 
     let progress = 1.0;
     if (currentMode === 'LIVE' && block.block_number === incomingBlockNum) {
@@ -1294,7 +1491,7 @@ function draw(timestamp) {
     }
 
     const phaseShift = (col + row) * 0.15;
-    const tileShimmer = Math.sin(Date.now() / 1800 + phaseShift) * 0.03 + 0.97;
+    const tileShimmer = Math.sin(Date.now() / phaseShimmerSpeed + phaseShift) * 0.03 + 0.97;
 
     let isTracked = false;
     let trackDirection = 'none';
@@ -1307,9 +1504,7 @@ function draw(timestamp) {
       }
     }
 
-    const isOnTemplate = currentMode === 'HISTORICAL' ? getDailyMaskAlignment(col, row, category) : true;
-
-    // 1. Organic Spatial Drift (Sine Wave based floating offset)
+    // 1. Organic Spatial Drift (Focus Mode Sine Wave)
     let floatX = 0;
     let floatY = 0;
     if (focusFloatProgress.value > 0) {
@@ -1317,24 +1512,27 @@ function draw(timestamp) {
       floatX = Math.sin(timeFactor + col * 0.5 + row * 0.3) * 8 * focusFloatProgress.value;
       floatY = Math.cos(timeFactor + col * 0.3 + row * 0.5) * 8 * focusFloatProgress.value;
     }
+    
+    // 2. TIME OF DAY MODIFIER (The physical layout warps based on Morning/Evening interacting with Network Factor)
+    const todDrift = getTimeOfDayDrift(col, row, cols, rows, networkFactor, timePhase);
+    floatX += todDrift.dx;
+    floatY += todDrift.dy;
 
-    // 2. Click Radial Wave Ripple Effect calculation
+    // 3. Click Radial Wave Ripple Effect calculation
     let rippleAlphaModifier = 1.0;
     if (rippleOriginCol !== -1 && rippleProgress.value > 0 && rippleProgress.value < 1.0) {
       const dist = Math.sqrt(Math.pow(col - rippleOriginCol, 2) + Math.pow(row - rippleOriginRow, 2));
       const targetRadius = rippleProgress.value * Math.max(cols, rows) * 1.5;
-      
-      // Ripple width span
       const width = 2.5;
       if (Math.abs(dist - targetRadius) < width) {
         const factor = 1.0 - (Math.abs(dist - targetRadius) / width);
-        // Peak flash boost
         rippleAlphaModifier = 1.0 + factor * 1.5;
       }
     }
 
-    drawTile(ctx, x + floatX, y + floatY, tileSize - gutter, block, blockInterval, progress * tileShimmer * rippleAlphaModifier, theme, isTracked, trackDirection, isOnTemplate);
+    drawTile(ctx, x + floatX, y + floatY, tileSize - phaseGutter, block, blockInterval, progress * tileShimmer * rippleAlphaModifier, theme, isTracked, trackDirection, isOnTemplate);
   }
+
 
   if (hoveredBlock) {
     const idx = blocks.indexOf(hoveredBlock);
@@ -1345,10 +1543,14 @@ function draw(timestamp) {
       const y = row * tileSize;
       const size = tileSize - gutter;
       
-      // Removed hard outer outline; relying on internal subpixel glow
-      // We can add a very subtle overall glass reflection
       ctx.save();
-      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      // Restored the intense hover glow effect
+      ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+      ctx.shadowBlur = 25;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 1.0)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, y, size, size);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
       ctx.fillRect(x, y, size, size);
       ctx.restore();
     }
@@ -1389,7 +1591,14 @@ function draw(timestamp) {
     }
   }
 
-  requestAnimationFrame(draw);
+  if (typeof xrRenderer !== 'undefined' && xrRenderer.xr.isPresenting) {
+      // Three.js WebXR requires setAnimationLoop, so we skip manual requestAnimationFrame
+    } else {
+      requestAnimationFrame(draw);
+    }
+  if (typeof updateXRInteraction === "function") updateXRInteraction();
+  if (typeof xrRenderer !== "undefined" && xrRenderer.xr.isPresenting) { xrRenderer.render(xrScene, xrCamera); }
+  if (isVRActive && audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
 }
 
 // Generate sub-pixel grid dots deterministically
@@ -1409,10 +1618,30 @@ function getSubpixelLayout(hash, targetCount, regularity) {
 }
 
 function drawTile(ctx, x, y, size, block, blockInterval, alpha, theme, isTracked, trackDirection, isOnTemplate) {
+  if (window.xrActiveBlocks && window.xrActiveBlocks.some(anim => anim.block === block)) return; // Hide on 2D canvas while 3D animation plays
+
+
+  
+
   const hash = block.hash.replace('0x', '');
   
-  ctx.fillStyle = isOnTemplate ? theme.tileBg : theme.bg;
-  ctx.fillRect(x, y, size, size);
+  // === PREMIUM 3D GLASS PANE BACKGROUND ===
+  const radius = size > 20 ? 8 : 2;
+  ctx.beginPath();
+  ctx.roundRect(x, y, size, size, radius);
+  
+  // Inner gradient for glass depth
+  const gradBg = ctx.createLinearGradient(x, y, x, y + size);
+  gradBg.addColorStop(0, isOnTemplate ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.01)');
+  gradBg.addColorStop(1, 'rgba(0,0,0,0.2)');
+  
+  ctx.fillStyle = gradBg;
+  ctx.fill();
+  
+  // Subtle outer glass rim (eliminates the "flat outline" look)
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = isOnTemplate ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.02)';
+  ctx.stroke();
 
   const density = Math.max(0.1, Math.min(0.85, block.tx_count / 300));
   const targetOnCount = Math.max(6, Math.floor(density * 64));
@@ -1427,79 +1656,132 @@ function drawTile(ctx, x, y, size, block, blockInterval, alpha, theme, isTracked
 
   const txs = getBlockTransactions(block);
 
-  activeCells.forEach((cell, idx) => {
-    const dx = cell.col - 3.5;
-    const dy = cell.row - 3.5;
-    const dist = Math.sqrt(dx * dx + dy * dy) / 4.95;
-    
-    const maskModifier = isOnTemplate ? 1.0 : 0.15;
-    const finalOpacity = Math.max(0.05, 1 - dist * edgeFadeFactor) * alpha * maskModifier;
-
-    const tx = txs[idx % txs.length] || { type: 'Plain Transfer' };
-    let baseColor = PALETTES[currentPalette][tx.type] || PALETTES[currentPalette]['default'];
-    if (currentPalette === 'monochrome') {
-      baseColor = theme.accent;
+  if (renderScale === 'MACRO') {
+    // 1. Calculate true dominant transaction type
+    let dominantType = 'Plain Transfer';
+    let maxCount = 0;
+    if (txs && txs.length > 0) {
+      let typeCounts = {};
+      for (let i = 0; i < txs.length; i++) {
+        let type = txs[i].type || 'Plain Transfer';
+        typeCounts[type] = (typeCounts[type] || 0) + 1;
+        if (typeCounts[type] > maxCount) {
+          maxCount = typeCounts[type];
+          dominantType = type;
+        }
+      }
     }
-
+    
+    // 2. Fetch color from palette safely
+    const baseColor = PALETTES[currentPalette][dominantType] || PALETTES[currentPalette]['default'] || 'hsl(210, 100%, 50%)';
+    
     let isDimmed = false;
     let isFilteredMatch = false;
     if (typeof clickedLegendFilter !== 'undefined' && clickedLegendFilter !== null) {
-      if (tx.type !== clickedLegendFilter) isDimmed = true;
+      if (dominantType !== clickedLegendFilter) isDimmed = true;
       else isFilteredMatch = true;
     }
     const isBlockHovered = (typeof hoveredBlock !== 'undefined' && block === hoveredBlock);
     
-    if (block.whale_flag === 1 && (idx === whaleIndex1 || idx === whaleIndex2)) {
-      ctx.fillStyle = `rgba(255, 255, 255, ${finalOpacity})`;
-    } else {
-      // Micro-interaction: Flash bright white on newly minted blocks (last 2 seconds)
-      let flashOverlay = 0;
-      if (currentMode === 'LIVE' && block._liveMintedTime) {
-        const age = Date.now() - block._liveMintedTime;
-        if (age < 800) {
-          flashOverlay = 1.0 - (age / 800); // Fades out over 800ms
-        }
-      }
-
-      if (isDimmed) {
-        ctx.fillStyle = 'rgba(255,255,255,0.02)';
-        ctx.shadowBlur = 0;
-        ctx.fillRect(x + cell.col * subSize + 0.5, y + cell.row * subSize + 0.5, subSize - 1, subSize - 1);
-      } else {
-        const parsedColor = baseColor.replace(')', `, ${finalOpacity})`).replace('hsl', 'hsla');
-        
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.shadowBlur = 0;
-        ctx.fillRect(x + cell.col * subSize + 1.5, y + cell.row * subSize + 1.5, subSize - 1, subSize - 1);
-
-        ctx.fillStyle = parsedColor;
-        if (isBlockHovered || isFilteredMatch) {
-          ctx.shadowColor = baseColor;
-          ctx.shadowBlur = 24; // Bigger, softer cinematic glow
-          ctx.fillRect(x + cell.col * subSize + 0.5, y + cell.row * subSize + 0.5, subSize - 1, subSize - 1);
-          // Added a bright core to the pixel without a hard outline
-          ctx.fillStyle = 'rgba(255,255,255,0.4)';
-          ctx.fillRect(x + cell.col * subSize + 1.5, y + cell.row * subSize + 1.5, subSize - 3, subSize - 3);
-        } else {
-          ctx.shadowBlur = flashOverlay > 0 ? 15 * flashOverlay : 0; // optimized: disabled continuous 2px blur
-          ctx.shadowColor = flashOverlay > 0 ? '#ffffff' : baseColor;
-          ctx.fillRect(x + cell.col * subSize + 0.5, y + cell.row * subSize + 0.5, subSize - 1, subSize - 1);
-          
-          if (flashOverlay > 0) {
-             ctx.fillStyle = `rgba(255, 255, 255, ${flashOverlay * 0.8})`;
-             ctx.fillRect(x + cell.col * subSize + 0.5, y + cell.row * subSize + 0.5, subSize - 1, subSize - 1);
-          }
-        }
-      }
+    ctx.save();
+    
+    // 3. Shape the portrait using the template
+    if (!isOnTemplate) { 
+      ctx.restore(); 
+      return; // Absolutely NO background. Pure geometric shape to satisfy user demand.
     }
+    
+    ctx.globalAlpha = isDimmed ? 0.15 : 1.0;
+    
+    // 4. Fill the massive solid square with the completely dominant color!
+    ctx.fillStyle = baseColor;
+    
+    // Premium Drop Shadow & Rounded Tile Look for MACRO
+    ctx.shadowColor = 'rgba(0,0,0,0.4)';
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 6;
+    
+    ctx.beginPath();
+    ctx.roundRect(x + 1, y + 1, size - 2, size - 2, size > 20 ? 6 : 2);
+    ctx.fill();
+    
+    // Clear shadow so it doesn't pollute strokes
+    ctx.shadowColor = 'transparent';
     ctx.shadowBlur = 0;
-  });
+    ctx.shadowOffsetY = 0;
+    
+    if (isFilteredMatch || isBlockHovered) {
+       ctx.shadowColor = baseColor;
+       ctx.shadowBlur = 20;
+       ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+       ctx.lineWidth = 2.5;
+       ctx.beginPath();
+       ctx.roundRect(x + 1, y + 1, size - 2, size - 2, size > 20 ? 6 : 2);
+       ctx.stroke();
+    }
+    ctx.restore();
+  } // END MACRO
+
+  if (renderScale === 'MICRO') {
+    ctx.save();
+    const maskModifier = isOnTemplate ? 1.0 : 0.05;
+    let isDimmed = false;
+    if (typeof clickedLegendFilter !== 'undefined' && clickedLegendFilter !== null) {
+      // In MICRO, we don't have domCat yet, so we don't dim the whole block blindly, we just let individual cells draw.
+      // But we can check if there are ANY transactions of the clicked type in this block.
+      const hasMatch = txs.some(t => t.type === clickedLegendFilter);
+      if (!hasMatch) isDimmed = true;
+    }
+    ctx.globalAlpha = maskModifier * (isDimmed ? 0.1 : 1.0);
+    const subSize = size / 8;
+    
+    activeCells.forEach(cell => {
+      const tx = txs[cell.index % txs.length] || { type: 'Plain Transfer' };
+      const cellColor = PALETTES[currentPalette][tx.type] || PALETTES[currentPalette]['default'];
+      ctx.fillStyle = cellColor;
+      
+      // Slight margin for subpixels so they look like a grid
+      ctx.fillRect(x + cell.col * subSize + 0.5, y + cell.row * subSize + 0.5, subSize - 1, subSize - 1);
+    });
+    ctx.restore();
+  }
+
 
   if (isTracked) {
-    ctx.strokeStyle = trackDirection === 'sent' ? 'rgba(255, 120, 0, 0.85)' : 'rgba(0, 229, 255, 0.85)';
+    ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2.0;
     ctx.strokeRect(x + 1, y + 1, size - 2, size - 2);
+    // Add intense visual tracking glow
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x + size/2 - 2, y + size/2 - 2, 4, 4);
+    ctx.shadowBlur = 0;
   }
+
+  
+  // === WHALE FLASH ANIMATION ===
+  if (block.whale_flag === 1) {
+      // Elegant pulsing flash instead of shockwaves/diamonds
+      const pulse = (Math.sin(Date.now() / 200) + 1) / 2; // 0.0 to 1.0 fast pulse
+      
+      ctx.save();
+      ctx.shadowColor = '#ffffff';
+      ctx.shadowBlur = 15 + (pulse * 15); // Pulsing glow from 15px to 30px
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.4 + pulse * 0.6})`; // Pulsing opacity 0.4 to 1.0
+      
+      if (renderScale === 'MACRO') {
+          ctx.fillRect(x, y, size, size);
+      } else {
+          // In MICRO, outline the micro-grid
+          ctx.strokeStyle = `rgba(255, 255, 255, ${0.6 + pulse * 0.4})`;
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x, y, size, size);
+      }
+      ctx.restore();
+  }
+
+
 }
 
 // Websocket sync
@@ -1509,7 +1791,7 @@ function connectRelay() {
 
   let candidateUrls = [];
   if (isLocalHost) {
-    const candidatePorts = [8080, 8086, 8087, 8088];
+    const candidatePorts = [8086, 8080, 8087, 8088];
     candidateUrls = candidatePorts.map((port) => `${wsProtocol}//${window.location.hostname}:${port}`);
   } else if (window.location.hostname.endsWith('.onrender.com')) {
     candidateUrls = [`wss://blockchain-mosaic-relay.onrender.com`];
@@ -1525,6 +1807,7 @@ function connectRelay() {
       if (currentMode === 'LIVE') {
         if (!window.simIntervalId) {
           window.simIntervalId = setInterval(generateSimulatedBlock, 12000);
+        generateSimulatedBlock(); // Call immediately on boot
           const capacity = cols * rows;
           for (let i = 0; i < capacity; i++) {
             blocks.push({
@@ -1540,15 +1823,33 @@ function connectRelay() {
           generateSimulatedBlock(); 
         }
       }
-      setTimeout(connectRelay, 15000);
+      window._wsReconnectDelay = (window._wsReconnectDelay || 1000) * 1.5;
+      if (window._wsReconnectDelay > 30000) window._wsReconnectDelay = 30000;
+      setTimeout(connectRelay, window._wsReconnectDelay);
       return;
     }
 
     const wsUrl = candidateUrls[currentIndex];
     currentIndex += 1;
+    
+    // Add Reconnecting UI status
+    const liveStatus = document.querySelector('.status-indicator');
+    if (liveStatus && currentMode === 'LIVE') {
+       liveStatus.style.background = '#ffaa00';
+       liveStatus.style.animation = 'none';
+       liveStatus.title = 'Reconnecting...';
+    }
+
     socket = new WebSocket(wsUrl);
 
     socket.addEventListener('open', () => {
+      window._wsReconnectDelay = 1000; // reset backoff
+      if (liveStatus && currentMode === 'LIVE') {
+         liveStatus.style.background = '#00ff88';
+         liveStatus.style.animation = 'liveGlow 2s ease-out infinite';
+         liveStatus.title = 'Live';
+      }
+
       socket.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
@@ -1557,6 +1858,13 @@ function connectRelay() {
             if (currentMode === 'LIVE' && currentChain === 'ethereum') {
               blocks = liveBlocks;
               updateStats();
+              
+              if (liveBlocks.length > 0) {
+                  const lastB = liveBlocks[liveBlocks.length - 1];
+                  const val = lastB.transactions ? lastB.transactions.reduce((acc, t) => acc + (t.valueUsd||0), 0) : ((lastB.tx_count||0) * 45 + (lastB.largest_tx_value_usd || 0));
+                  const txCount = lastB.transactions ? lastB.transactions.length : (lastB.tx_count || 0);
+                  window.lastBillboardStats = { txCount, val: Math.round(val) };
+              }
             } else {
               liveBlocksCache = liveBlocks;
             }
@@ -1566,7 +1874,120 @@ function connectRelay() {
               incomingBlockNum = newBlock.block_number;
               incomingBlockStartTime = Date.now();
               newBlock._liveMintedTime = Date.now();
-              blocks.push(newBlock); if (typeof audio !== 'undefined' && currentMode !== 'ART_SYNTHESIS') audio.playBlockTones(newBlock);
+              blocks.push(newBlock);
+              
+              if (true) {
+                  const val = newBlock.transactions ? newBlock.transactions.reduce((acc, t) => acc + (t.valueUsd||0), 0) : ((newBlock.tx_count||0) * 45 + (newBlock.largest_tx_value_usd || 0));
+                  const txCount = newBlock.transactions ? newBlock.transactions.length : (newBlock.tx_count || 0);
+                  
+                  // Set notification text for the billboard
+                  window.lastNotificationTime = Date.now();
+                  window.lastBillboardStats = { txCount, val: Math.round(val) };
+                  
+                  // ==========================================
+                  // 3D ELEGANT SLIDE ANIMATION
+                  // ==========================================
+                  if (typeof THREE !== 'undefined' && typeof xrScene !== 'undefined') {
+                      let colorStr = '#ffffff'; // Force white as requested
+                      const smashColor = new THREE.Color(0xffffff);
+                      
+                      // Update particles ONLY if the global theme changes. We'll do this outside the smash block!
+                      
+                      // Create a physical glowing block
+                      // Make each block unique based on transaction volume
+                      // AWARD-WINNING: Tile Design
+                      const blockGeo = new THREE.BoxGeometry(0.5, 0.5, 0.04); // Thin, sleek tile
+                      const blockMat = new THREE.MeshBasicMaterial({ color: smashColor, transparent: true, opacity: 0.9 });
+                      const physicalBlock = new THREE.Mesh(blockGeo, blockMat);
+                      
+                      // Glowing Edge Wireframe
+                      const edges = new THREE.EdgesGeometry(blockGeo);
+                      const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
+                      const wireframe = new THREE.LineSegments(edges, lineMat);
+                      physicalBlock.add(wireframe);
+                      
+                      // EXPERIENTIAL GSAP-STYLE LIFT: Starts perfectly flat on the floor
+                      physicalBlock.position.set(0.0, -0.6, -2.0); // Exact floor height
+                      physicalBlock.rotation.set(-Math.PI / 2, 0, 0); // Flat on ground
+                      xrScene.add(physicalBlock);
+                      
+                      // VANISHING NOTIFICATION
+                      const notifCvs = document.createElement('canvas');
+                      notifCvs.width = 512; notifCvs.height = 128;
+                      const nCtx = notifCvs.getContext('2d');
+                      nCtx.fillStyle = 'rgba(0, 255, 136, 0.2)';
+                      nCtx.fillRect(0,0,512,128);
+                      nCtx.strokeStyle = '#00ff88'; nCtx.lineWidth = 4; nCtx.strokeRect(2,2,508,124);
+                      nCtx.fillStyle = '#ffffff'; nCtx.font = '36px "Space Mono", monospace'; nCtx.textAlign = 'center';
+                      nCtx.fillText(`NEW BLOCK #${newBlock.block_number || newBlock.id || 'LIVE'}`, 256, 50);
+                      nCtx.font = '24px "Outfit", sans-serif';
+                      nCtx.fillText(`${txCount} Payments • $${Math.round(val).toLocaleString()} Moved`, 256, 90);
+                      
+                      const notifTex = new THREE.CanvasTexture(notifCvs);
+                      notifTex.needsUpdate = true;
+                      const notifMat = new THREE.MeshBasicMaterial({ map: notifTex, transparent: true, opacity: 1.0, depthTest: false, side: THREE.DoubleSide });
+                      const notifMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 0.5), notifMat);
+                      notifMesh.position.set(0, 1.5, -1.5); // Float exactly at eye level
+                      notifMesh.lookAt(0, 1.6, 0); // FACE THE USER DIRECTLY
+                      xrScene.add(notifMesh);
+                      
+                      if(!window.xrActiveBlocks) window.xrActiveBlocks = [];
+                      window.xrActiveBlocks.push({
+                          block: newBlock,
+                          mesh: physicalBlock, 
+                          notif: notifMesh,
+                          color: colorStr,
+                          startX: 0.0, startY: -0.6, startZ: -2.0,
+                          startRotX: -Math.PI / 2, startRotY: 0, startRotZ: 0,
+                          targetX: (Math.random() - 0.5) * 4.0, // Land somewhere on the curved screen naturally
+                          targetY: 1.0 + Math.random() * 2.0, 
+                          targetZ: -9.5, 
+                          targetRotX: 0, targetRotY: 0, targetRotZ: 0,
+                          progress: 0
+                      });
+                  }
+
+
+              }
+              
+              if (typeof gsap !== 'undefined' && window.xrGridHelper) {
+                  // Ground Pulse Animation
+                  // Grid GSAP sanitized
+              }
+              
+              // AWARD-WINNING: Floor Pulse & Whale Flash
+              if (typeof xrScene !== 'undefined') {
+                  // Standard Floor Pulse
+                  if (window.xrGridHelper) {
+                      window.xrGridHelper.material.color.setHex(0xffffff); // Flash bright white
+                      // It will automatically fade back down in the updateXRInteraction loop
+                  }
+                  
+                  if (newBlock.whale_flag === 1) {
+                      if (navigator.vibrate) navigator.vibrate([100, 50, 200]);
+                      
+                      // MASSIVE WHALE FLASH
+                      const flashGeo = new THREE.PlaneGeometry(100, 100);
+                      const flashMat = new THREE.MeshBasicMaterial({ color: 0xff0055, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
+                      const flashMesh = new THREE.Mesh(flashGeo, flashMat);
+                      flashMesh.position.set(0, 0, -2);
+                      flashMesh.lookAt(0, 1.6, 0);
+                      xrScene.add(flashMesh);
+                      
+                      // Animate flash out
+                      let op = 0.8;
+                      const fInt = setInterval(() => {
+                          op -= 0.05;
+                          flashMesh.material.opacity = op;
+                          if (op <= 0) {
+                              clearInterval(fInt);
+                              xrScene.remove(flashMesh);
+                              flashMesh.geometry.dispose();
+                              flashMesh.material.dispose();
+                          }
+                      }, 50);
+                  }
+              } if (typeof audio !== 'undefined' && currentMode !== 'ART_SYNTHESIS') audio.playBlockTones(newBlock);
 
               let currentCapacity = cols * rows;
               if (blocks.length > currentCapacity) {
@@ -1641,7 +2062,14 @@ function connectRelay() {
         const liveBlocks = msg.data.slice(-maxTiles);
         if (currentMode === 'LIVE' && currentChain === 'ethereum') {
           blocks = liveBlocks;
-          updateStats();
+              updateStats();
+              
+              if (liveBlocks.length > 0) {
+                  const lastB = liveBlocks[liveBlocks.length - 1];
+                  const val = lastB.transactions ? lastB.transactions.reduce((acc, t) => acc + (t.valueUsd||0), 0) : ((lastB.tx_count||0) * 45 + (lastB.largest_tx_value_usd || 0));
+                  const txCount = lastB.transactions ? lastB.transactions.length : (lastB.tx_count || 0);
+                  window.lastBillboardStats = { txCount, val: Math.round(val) };
+              }
         } else {
           liveBlocksCache = liveBlocks;
         }
@@ -1651,7 +2079,120 @@ function connectRelay() {
           incomingBlockNum = newBlock.block_number;
           incomingBlockStartTime = Date.now();
           newBlock._liveMintedTime = Date.now();
-              blocks.push(newBlock); if (typeof audio !== 'undefined' && currentMode !== 'ART_SYNTHESIS') audio.playBlockTones(newBlock);
+              blocks.push(newBlock);
+              
+              if (true) {
+                  const val = newBlock.transactions ? newBlock.transactions.reduce((acc, t) => acc + (t.valueUsd||0), 0) : ((newBlock.tx_count||0) * 45 + (newBlock.largest_tx_value_usd || 0));
+                  const txCount = newBlock.transactions ? newBlock.transactions.length : (newBlock.tx_count || 0);
+                  
+                  // Set notification text for the billboard
+                  window.lastNotificationTime = Date.now();
+                  window.lastBillboardStats = { txCount, val: Math.round(val) };
+                  
+                  // ==========================================
+                  // 3D ELEGANT SLIDE ANIMATION
+                  // ==========================================
+                  if (typeof THREE !== 'undefined' && typeof xrScene !== 'undefined') {
+                      let colorStr = '#ffffff'; // Force white as requested
+                      const smashColor = new THREE.Color(0xffffff);
+                      
+                      // Update particles ONLY if the global theme changes. We'll do this outside the smash block!
+                      
+                      // Create a physical glowing block
+                      // Make each block unique based on transaction volume
+                      // AWARD-WINNING: Tile Design
+                      const blockGeo = new THREE.BoxGeometry(0.5, 0.5, 0.04); // Thin, sleek tile
+                      const blockMat = new THREE.MeshBasicMaterial({ color: smashColor, transparent: true, opacity: 0.9 });
+                      const physicalBlock = new THREE.Mesh(blockGeo, blockMat);
+                      
+                      // Glowing Edge Wireframe
+                      const edges = new THREE.EdgesGeometry(blockGeo);
+                      const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
+                      const wireframe = new THREE.LineSegments(edges, lineMat);
+                      physicalBlock.add(wireframe);
+                      
+                      // EXPERIENTIAL GSAP-STYLE LIFT: Starts perfectly flat on the floor
+                      physicalBlock.position.set(0.0, -0.6, -2.0); // Exact floor height
+                      physicalBlock.rotation.set(-Math.PI / 2, 0, 0); // Flat on ground
+                      xrScene.add(physicalBlock);
+                      
+                      // VANISHING NOTIFICATION
+                      const notifCvs = document.createElement('canvas');
+                      notifCvs.width = 512; notifCvs.height = 128;
+                      const nCtx = notifCvs.getContext('2d');
+                      nCtx.fillStyle = 'rgba(0, 255, 136, 0.2)';
+                      nCtx.fillRect(0,0,512,128);
+                      nCtx.strokeStyle = '#00ff88'; nCtx.lineWidth = 4; nCtx.strokeRect(2,2,508,124);
+                      nCtx.fillStyle = '#ffffff'; nCtx.font = '36px "Space Mono", monospace'; nCtx.textAlign = 'center';
+                      nCtx.fillText(`NEW BLOCK #${newBlock.block_number || newBlock.id || 'LIVE'}`, 256, 50);
+                      nCtx.font = '24px "Outfit", sans-serif';
+                      nCtx.fillText(`${txCount} Payments • $${Math.round(val).toLocaleString()} Moved`, 256, 90);
+                      
+                      const notifTex = new THREE.CanvasTexture(notifCvs);
+                      notifTex.needsUpdate = true;
+                      const notifMat = new THREE.MeshBasicMaterial({ map: notifTex, transparent: true, opacity: 1.0, depthTest: false, side: THREE.DoubleSide });
+                      const notifMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 0.5), notifMat);
+                      notifMesh.position.set(0, 1.5, -1.5); // Float exactly at eye level
+                      notifMesh.lookAt(0, 1.6, 0); // FACE THE USER DIRECTLY
+                      xrScene.add(notifMesh);
+                      
+                      if(!window.xrActiveBlocks) window.xrActiveBlocks = [];
+                      window.xrActiveBlocks.push({
+                          block: newBlock,
+                          mesh: physicalBlock, 
+                          notif: notifMesh,
+                          color: colorStr,
+                          startX: 0.0, startY: -0.6, startZ: -2.0,
+                          startRotX: -Math.PI / 2, startRotY: 0, startRotZ: 0,
+                          targetX: (Math.random() - 0.5) * 4.0, // Land somewhere on the curved screen naturally
+                          targetY: 1.0 + Math.random() * 2.0, 
+                          targetZ: -9.5, 
+                          targetRotX: 0, targetRotY: 0, targetRotZ: 0,
+                          progress: 0
+                      });
+                  }
+
+
+              }
+              
+              if (typeof gsap !== 'undefined' && window.xrGridHelper) {
+                  // Ground Pulse Animation
+                  // Grid GSAP sanitized
+              }
+              
+              // AWARD-WINNING: Floor Pulse & Whale Flash
+              if (typeof xrScene !== 'undefined') {
+                  // Standard Floor Pulse
+                  if (window.xrGridHelper) {
+                      window.xrGridHelper.material.color.setHex(0xffffff); // Flash bright white
+                      // It will automatically fade back down in the updateXRInteraction loop
+                  }
+                  
+                  if (newBlock.whale_flag === 1) {
+                      if (navigator.vibrate) navigator.vibrate([100, 50, 200]);
+                      
+                      // MASSIVE WHALE FLASH
+                      const flashGeo = new THREE.PlaneGeometry(100, 100);
+                      const flashMat = new THREE.MeshBasicMaterial({ color: 0xff0055, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
+                      const flashMesh = new THREE.Mesh(flashGeo, flashMat);
+                      flashMesh.position.set(0, 0, -2);
+                      flashMesh.lookAt(0, 1.6, 0);
+                      xrScene.add(flashMesh);
+                      
+                      // Animate flash out
+                      let op = 0.8;
+                      const fInt = setInterval(() => {
+                          op -= 0.05;
+                          flashMesh.material.opacity = op;
+                          if (op <= 0) {
+                              clearInterval(fInt);
+                              xrScene.remove(flashMesh);
+                              flashMesh.geometry.dispose();
+                              flashMesh.material.dispose();
+                          }
+                      }, 50);
+                  }
+              } if (typeof audio !== 'undefined' && currentMode !== 'ART_SYNTHESIS') audio.playBlockTones(newBlock);
           
           let currentCapacity = cols * rows;
           if (blocks.length > currentCapacity) {
@@ -1825,18 +2366,18 @@ function updateStats() {
     else if (totalTx > 1000) weatherCondition = "highly congested and expensive";
     else if (directCount > totalTx * 0.5) weatherCondition = "dominated by everyday human activity";
     
-    const numColor = THEMES[currentTheme].text === '#e2e2da' ? '#fff' : '#000';
+    const numColor = '#ffffff';
     
     if (!weatherLine.hasAttribute('data-initialized')) {
       weatherLine.innerHTML = `
         <div style="font-family: 'Outfit', sans-serif; font-weight: 200; font-size: clamp(32px, 4vw, 54px); letter-spacing: -0.02em; line-height: 1.2; margin-bottom: 8px;">
           Today, 
           <div style="display: inline-block; perspective: 400px; vertical-align: bottom;">
-            <span id="ticker-count" style="display: inline-block; font-family: 'Space Mono', monospace; font-weight: 700; color: ${numColor}; text-shadow: 0 0 16px rgba(255,255,255,0.3); transform-style: preserve-3d; will-change: transform;">0</span>
+            <span id="ticker-count" style="display: inline-block; font-family: 'Space Mono', monospace; font-weight: 700; color: ${numColor}; text-shadow: 0 4px 16px rgba(0,0,0,0.8), 0 0 30px rgba(255,255,255,0.2); transform-style: preserve-3d; will-change: transform;">0</span>
           </div> 
           human payments moved 
           <div style="display: inline-block; perspective: 400px; vertical-align: bottom;">
-            <span id="ticker-usd" style="display: inline-block; font-family: 'Space Mono', monospace; font-weight: 700; color: ${numColor}; text-shadow: 0 0 16px rgba(255,255,255,0.3); transform-style: preserve-3d; will-change: transform;">$0</span>
+            <span id="ticker-usd" style="display: inline-block; font-family: 'Space Mono', monospace; font-weight: 700; color: ${numColor}; text-shadow: 0 4px 16px rgba(0,0,0,0.8), 0 0 30px rgba(255,255,255,0.2); transform-style: preserve-3d; will-change: transform;">$0</span>
           </div>
         </div>
         <div id="ticker-prose" style="font-family: 'Outfit', sans-serif; font-size: clamp(16px, 2vw, 24px); font-style: italic; font-weight: 300; opacity: 0.6; letter-spacing: 0.05em; transition: opacity 0.5s;">
@@ -1872,8 +2413,8 @@ function updateStats() {
           .to([elCount, elUsd], { rotateX: 0, opacity: 1, duration: 0.5, ease: 'back.out(1.5)' });
         
         gsap.to(window.tickerProxy, {
-          count: directCount,
-          usd: totalUsd,
+          count: directCount || 0,
+          usd: totalUsd || 0,
           duration: 0.75,
           ease: 'power2.out',
           onUpdate: () => {
@@ -1881,8 +2422,8 @@ function updateStats() {
             const volStr = vUsd > 1000000 ? '$' + (vUsd / 1000000).toFixed(2) + 'M' : '$' + Math.floor(vUsd).toLocaleString();
             elCount.textContent = Math.floor(window.tickerProxy.count).toLocaleString();
             elUsd.textContent = volStr;
-            elCount.style.color = THEMES[currentTheme].text === '#e2e2da' ? '#fff' : '#000';
-            elUsd.style.color = THEMES[currentTheme].text === '#e2e2da' ? '#fff' : '#000';
+            elCount.style.color = '#ffffff';
+            elUsd.style.color = '#ffffff';
           }
         });
       }
@@ -1958,30 +2499,41 @@ function updateTooltip(block, e) {
   const feeUnit = currentChain === 'solana' ? 'SOL' : 'Gwei';
 
   hoverTooltip.innerHTML = `
-    <div style="font-family: 'Outfit', sans-serif; font-size: 13px; line-height: 1.5; color: rgba(255,255,255,0.9); padding: 4px;">
-      This block was mostly filled with <strong>${block.contract_ratio > 0.6 ? 'Trading Coins' : 'Direct Payments'}</strong>. 
-      <br><br>
-      Network traffic was <strong>${block.base_fee_gwei > 50 ? 'Congested and Expensive' : 'Quiet and Cheap'}</strong>, costing people around <strong>${block.base_fee_gwei.toFixed(0)} Gwei</strong>.
-      <br><br>
-      <span style="color: #00ff88;">${block.tx_count} Total Actions</span> • <span style="color: rgba(255,255,255,0.5);">$${totalBlockUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })} Moved</span>
+    <div style="font-family: 'Space Mono', monospace; font-size: 16px; line-height: 1.5; color: #fff; padding: 10px;">
+      <div style="color: #00ff88; font-size: 12px; margin-bottom: 8px;">BLOCK #${block.block_number || block.id || 'LIVE'}</div>
+      <div>PAYMENTS: <strong>${block.tx_count || 50}</strong></div>
+      <div>MOVED: <strong>$${(typeof totalBlockUsd !== 'undefined' ? totalBlockUsd : 50000).toLocaleString()}</strong></div>
     </div>
   `;
 
-  // GSAP Spring Tooltip Interpolation
+  // GSAP Spring Tooltip Interpolation with Bounds Checking
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  hoverTooltip.style.visibility = 'hidden';
+  hoverTooltip.classList.add('visible');
+  const rect = hoverTooltip.getBoundingClientRect();
+  hoverTooltip.style.visibility = '';
+  
+  let targetX = e.clientX + 20;
+  let targetY = e.clientY + 20;
+  
+  if (targetX + rect.width > vw) targetX = e.clientX - rect.width - 20;
+  if (targetY + rect.height > vh) targetY = e.clientY - rect.height - 20;
+
   if (typeof gsap !== 'undefined') {
-    // Add an offset so cursor doesn't obscure it
+    hoverTooltip.style.left = '0px';
+    hoverTooltip.style.top = '0px';
     gsap.to(hoverTooltip, { 
-      x: e.clientX + 20, 
-      y: e.clientY + 20, 
-      duration: 0.5, 
-      ease: 'power3.out',
+      x: targetX, 
+      y: targetY, 
+      duration: 0.6, 
+      ease: 'back.out(1.2)', // Premium spring physics
       overwrite: 'auto'
     });
   } else {
-    hoverTooltip.style.left = `${e.clientX + 20}px`;
-    hoverTooltip.style.top = `${e.clientY + 20}px`;
+    hoverTooltip.style.left = `${targetX}px`;
+    hoverTooltip.style.top = `${targetY}px`;
   }
-  hoverTooltip.classList.add('visible');
 }
 
 canvas.addEventListener('mousemove', (e) => {
@@ -2034,6 +2586,7 @@ function renderNetworkGraph(block) {
   if (!gCanvas) return;
   const gCtx = gCanvas.getContext('2d');
   const theme = THEMES[currentTheme];
+  syncBodyTheme();
 
   gCtx.clearRect(0, 0, gCanvas.width, gCanvas.height);
   
@@ -2133,10 +2686,7 @@ function showBlockDetails(block) {
       cell.classList.add('subpixel-inspect-cell');
       
       let baseColor = PALETTES[currentPalette][tx.type] || PALETTES[currentPalette]['default'];
-      if (currentPalette === 'monochrome') {
-        const theme = THEMES[currentTheme];
-        baseColor = theme.accent;
-      }
+      
       cell.style.backgroundColor = baseColor;
       cell.title = `${tx.type} - $${tx.valueUsd.toLocaleString()}`;
 
@@ -2235,7 +2785,17 @@ function showBlockDetails(block) {
 // Drawer Toggling (Mutual exclusion: Close details sidebar if Settings drawer opens)
 archiveToggleBtn.addEventListener('click', () => {
   lastInteractionTime = Date.now();
-  archiveDrawer.classList.toggle('open');
+  const isDrawerOpen = archiveDrawer.classList.toggle('open');
+  if (isDrawerOpen && typeof gsap !== 'undefined') {
+      gsap.fromTo('.calendar-day', 
+          { opacity: 0, scale: 0.2, y: 20 }, 
+          { opacity: 1, scale: 1, y: 0, stagger: 0.015, ease: 'back.out(1.5)', duration: 0.5, overwrite: true }
+      );
+      gsap.fromTo('.drawer-header h2', 
+          { x: 30, opacity: 0 }, 
+          { x: 0, opacity: 1, ease: 'power3.out', duration: 0.4, delay: 0.1, overwrite: true }
+      );
+  }
   if (archiveDrawer.classList.contains('open') && detailsSidebar) {
     detailsSidebar.classList.remove('open');
     canvasContainer.classList.remove('sidebar-open');
@@ -2295,14 +2855,18 @@ function renderCalendar() {
       const dot = document.createElement('span');
       dot.classList.add('day-dot');
       
+      // Phase 1: On-Chain Heatmap
+      dayEl.style.color = '#fff';
+      dayEl.style.border = '1px solid rgba(255,255,255,0.05)';
       if (category === 'zen') {
-        dot.classList.add('calm');
+        dayEl.style.background = 'rgba(0, 255, 136, 0.04)';
       } else if (category === 'dragon') {
-        dot.classList.add('congested');
+        dayEl.style.background = 'rgba(0, 255, 136, 0.25)';
+        dayEl.style.boxShadow = '0 0 10px rgba(0,255,136,0.2)';
+        dayEl.style.borderColor = 'rgba(0, 255, 136, 0.4)';
       } else {
-        dot.classList.add('active');
+        dayEl.style.background = 'rgba(0, 255, 136, 0.1)';
       }
-      dayEl.appendChild(dot);
 
       if (day === today.getDate()) {
         dayEl.classList.add('active-selected');
@@ -2323,6 +2887,19 @@ function renderCalendar() {
 }
 
 // Playback ticker loop helper
+function updatePlaybackTimeDisplay() {
+  const hourDisplay = document.getElementById('playback-hour-display');
+  if (hourDisplay && playbackFullList && playbackFullList.length > 0) {
+    const ratio = playbackIndex / playbackFullList.length;
+    const totalMinutes = ratio * 24 * 60;
+    const hh = String(Math.floor(totalMinutes / 60)).padStart(2, '0');
+    const mm = String(Math.floor(totalMinutes % 60)).padStart(2, '0');
+    if (hourDisplay.textContent !== `${hh}:${mm}`) {
+      hourDisplay.textContent = `${hh}:${mm}`;
+    }
+  }
+}
+
 function tickPlayback() {
   if (playbackIndex >= playbackFullList.length) {
     pausePlayback();
@@ -2339,6 +2916,8 @@ function tickPlayback() {
   }
   
   playbackCounter.textContent = `${playbackIndex} / ${playbackFullList.length} Blocks`;
+  updatePlaybackTimeDisplay();
+  updatePlaybackTimeDisplay();
 }
 
 function startPlayback() {
@@ -2387,6 +2966,8 @@ playbackSlider.addEventListener('input', (e) => {
   blocks = playbackFullList.slice(0, playbackIndex);
   updateStats();
   playbackCounter.textContent = `${playbackIndex} / ${playbackFullList.length} Blocks`;
+  updatePlaybackTimeDisplay();
+  updatePlaybackTimeDisplay();
   lastInteractionTime = Date.now();
 });
 
@@ -2403,6 +2984,55 @@ playbackPlayBtn.addEventListener('click', () => {
 
 // Transition Layouts
 async function loadHistoricalPortrait(dateStr, dayNum) {
+  // Beautiful scatter animation for blocks!
+  if (typeof gsap !== 'undefined') {
+      const cvsCont = document.getElementById('canvas-container');
+      
+      // Flash and blur the container
+      gsap.to(cvsCont, { 
+          filter: 'blur(20px) brightness(2)',
+          scale: 0.9,
+          duration: 0.4,
+          ease: 'power2.in'
+      });
+      
+      // Cinematic Calendar Transition: Color Shift and Lights!
+      if (typeof xrScene !== 'undefined') {
+          // Flash the entire void into a neon synthwave sunset
+          // xrScene background gsap sanitized
+          // xrScene fog gsap sanitized
+      }
+
+      // In 3D VR, explode the cubes outwards
+      if (window.xrBlockMesh) {
+          // xrBlockMesh gsap sanitized
+      }
+      
+      await new Promise(r => setTimeout(r, 450));
+      
+      // Restore gracefully
+      gsap.to(cvsCont, { 
+          filter: 'blur(0px) brightness(1)',
+          scale: 1.0,
+          duration: 1.2,
+          ease: 'expo.out'
+      });
+      
+      if (typeof xrScene !== 'undefined') {
+          // Restore the deep void
+          // xrScene background gsap sanitized
+          // xrScene fog gsap sanitized
+      }
+      
+      if (window.xrBlockMesh) {
+          window.xrBlockMesh.position.set(0, 1.6, 0); // snap back
+          // Add a bounce to the cubes' scale by triggering a global 'minted' flag
+          if (blocks) {
+             blocks.forEach(b => b._liveMintedTime = Date.now() + Math.random() * 500);
+          }
+      }
+  }
+
   lastInteractionTime = Date.now();
   archiveDrawer.classList.remove('open');
   pausePlayback();
@@ -2426,6 +3056,7 @@ async function loadHistoricalPortrait(dateStr, dayNum) {
   currentMode = 'HISTORICAL';
   selectedHistoricalDate = formattedFriendlyDate;
   historicalDayNumber = dayNum;
+  renderScale = 'MICRO'; // Always start day playback in subpixel view
   
   const category = getCategoryForDay(dayNum);
   const categoryLabel = getCategoryLabel(category);
@@ -2464,8 +3095,13 @@ async function loadHistoricalPortrait(dateStr, dayNum) {
   statsBlockLabel.textContent = 'PORTRAIT DATE';
   statsFillLabel.textContent = 'BLOCKS MINED';
   
-  historicalDateLabel.textContent = `${formattedFriendlyDate} — ${categoryLabel}`;
-  historicalBanner.classList.add('active');
+  if (historicalDateLabel) historicalDateLabel.textContent = `${formattedFriendlyDate} — ${categoryLabel}`;
+  if (historicalBanner) historicalBanner.classList.add('active');
+  
+  // Phase 1: GSAP Crossfade Out
+  if (typeof gsap !== 'undefined') {
+    gsap.to(canvas, { opacity: 0.1, duration: 0.3, ease: 'power2.out' });
+  }
 
   // Try to fetch real blocks from the backend
   let fetchedBlocks = [];
@@ -2473,7 +3109,7 @@ async function loadHistoricalPortrait(dateStr, dayNum) {
     // Resolve HTTP host address dynamically
     const protocol = window.location.protocol;
     const host = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      ? `${window.location.hostname}:8080`
+      ? `${window.location.hostname}:8086`
       : 'blockchain-mosaic-production.up.railway.app'; // Change to match your production API domain
     
     const response = await fetch(`${protocol}//${host}/api/history/${dateStr}`);
@@ -2501,6 +3137,9 @@ async function loadHistoricalPortrait(dateStr, dayNum) {
 
   updateStats();
   
+  // Fix calendar bug: Automatically start playback to watch it evolve!
+  setTimeout(() => { startPlayback(); }, 500);
+  
   document.querySelectorAll('.calendar-day').forEach(el => {
     el.classList.remove('active-selected');
   });
@@ -2524,9 +3163,29 @@ function switchToLive() {
   const artOv = document.getElementById('art-synthesis-overlay');
   if (artOv) { artOv.style.display = 'none'; }
   
+  const genPortraitBtn = document.getElementById('generate-portrait-btn');
+  if (genPortraitBtn) {
+    genPortraitBtn.textContent = 'View Portrait';
+    genPortraitBtn.style.color = '#00ff88';
+    genPortraitBtn.style.borderColor = 'rgba(0,255,136,0.4)';
+    genPortraitBtn.style.background = 'rgba(0,255,136,0.12)';
+  }
+
   if (currentMode === 'HISTORICAL' || currentMode === 'ART_SYNTHESIS') {
     currentMode = 'LIVE';
+    renderScale = 'MICRO';
+    if (typeof updateScaleUI === 'function') updateScaleUI();
     
+    // Phase 2: Exit Gallery Mode
+    const header = document.querySelector('.app-header');
+    const playCtrls = document.querySelector('.playback-controls');
+    const canvasCont = document.getElementById('canvas-container');
+    if (typeof gsap !== 'undefined') {
+      if (header) gsap.to(header, { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out' });
+      if (playCtrls) gsap.to(playCtrls, { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out' });
+      if (canvasCont) gsap.to(canvasCont, { scale: 1.0, borderRadius: '0px', boxShadow: 'none', duration: 0.8, ease: 'power2.out' });
+    }
+
     tileSize = 64;
     resizeCanvas();
     
@@ -2537,7 +3196,7 @@ function switchToLive() {
     statsBlockLabel.textContent = 'LATEST BLOCK';
     statsFillLabel.textContent = 'GRID FILL';
     
-    historicalBanner.classList.remove('active');
+    if (historicalBanner) historicalBanner.classList.remove('active');
     updateStats();
     const ctxCard = document.getElementById('historical-context-card');
     if (ctxCard) ctxCard.style.display = 'none';
@@ -2813,8 +3472,18 @@ window.addEventListener('click', () => {
 // Run
 parseUrlParameters();
 renderCalendar();
-connectRelay();
-requestAnimationFrame(draw);
+
+// Replaced dead websocket relay with live Ethereum RPC polling
+if (currentMode === 'LIVE') {
+    generateSimulatedBlock(); // Initial fetch
+    setInterval(generateSimulatedBlock, 12000); // 12s Ethereum cadence
+}
+
+if (typeof xrRenderer !== 'undefined' && xrRenderer.xr.isPresenting) {
+      // Three.js WebXR requires setAnimationLoop, so we skip manual requestAnimationFrame
+    } else {
+      requestAnimationFrame(draw);
+    }
 updateStats();
 applyThemeStyles();
 updateRatioBarColors();
@@ -2923,6 +3592,11 @@ if (legendEl) {
 
 function triggerArtisticSynthesis(day, dayBlocks) {
   currentMode = 'ART_SYNTHESIS';
+  
+  // Actually trigger the solid-color MACRO portrait view!
+  renderScale = 'MACRO';
+  if (typeof updateScaleUI === 'function') updateScaleUI();
+
   pausePlayback();
   
   // Use the blocks exactly as they were during playback — same data, same shape
@@ -2930,7 +3604,7 @@ function triggerArtisticSynthesis(day, dayBlocks) {
     blocks = [...dayBlocks];
   } else {
     // Fallback: generate if no playback blocks provided
-    blocks = generateMockHistoryForDate('2026-07-' + (day < 10 ? '0'+day : String(day))).slice(0, maxTiles);
+    blocks = generateMockHistoryForDate(selectedHistoricalDate || new Date().toISOString().split('T')[0]).slice(0, maxTiles);
   }
   
   let counts = { 'Plain Transfer': 0, 'Token Swap': 0, 'NFT Mint': 0, 'Smart Contract': 0 };
@@ -2946,6 +3620,19 @@ function triggerArtisticSynthesis(day, dayBlocks) {
   document.getElementById('archive-drawer').classList.remove('open');
   document.querySelector('.canvas-container').classList.remove('sidebar-open');
   
+  // Phase 2: Gallery Mode UI Pushback
+  const header = document.querySelector('.app-header');
+  const playCtrls = document.querySelector('.playback-controls');
+  const canvasCont = document.getElementById('canvas-container');
+  if (typeof gsap !== 'undefined') {
+    if (header) gsap.to(header, { opacity: isVRActive ? 0.9 : 0.1, y: 0, duration: 0.8, ease: 'power3.out' });
+    if (playCtrls) gsap.to(playCtrls, { opacity: 0.1, y: 20, duration: 0.8, ease: 'power3.out' });
+    if (canvasCont) {
+      canvasCont.style.transition = 'none'; // let GSAP handle it
+      gsap.to(canvasCont, { scale: 0.85, borderRadius: '24px', boxShadow: '0 40px 100px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.08)', duration: 1.2, ease: 'expo.out' });
+    }
+  }
+
   // Generate the story text
   let storyText = "A calm, balanced day on the network.";
   if (dominantType === 'Token Swap') {
@@ -2961,10 +3648,12 @@ function triggerArtisticSynthesis(day, dayBlocks) {
     artOverlay = document.createElement('div');
     artOverlay.id = 'art-synthesis-overlay';
     artOverlay.style.position = 'absolute';
-    artOverlay.style.bottom = '80px';
+    artOverlay.style.bottom = '180px';
     artOverlay.style.left = '50%';
     artOverlay.style.transform = 'translateX(-50%)';
     artOverlay.style.zIndex = '9000';
+    artOverlay.style.background = 'radial-gradient(circle, rgba(10,12,16,0.6) 0%, rgba(10,12,16,0) 60%)';
+    artOverlay.style.padding = '40px';
     artOverlay.style.textAlign = 'center';
     artOverlay.style.color = '#fff';
     artOverlay.style.pointerEvents = 'none';
@@ -3001,10 +3690,10 @@ function triggerArtisticSynthesis(day, dayBlocks) {
 // MICRO-INTERACTION: Magnetic Buttons
 // ----------------------------------------------------
 function initMagneticButtons() {
-  const buttons = document.querySelectorAll('header button, #archive-toggle-btn, #theme-toggle-btn');
+  const buttons = document.querySelectorAll('header button, #archive-toggle-btn, #theme-toggle-btn, #scale-toggle-btn');
   buttons.forEach(btn => {
     btn.addEventListener('mouseenter', () => {
-      if (typeof audio !== 'undefined') audio.playUIHoverTick();
+      // Sound omitted
     });
     btn.addEventListener('mousemove', (e) => {
       const rect = btn.getBoundingClientRect();
@@ -3073,13 +3762,877 @@ function initCustomCursor() {
   document.addEventListener('mouseenter', () => gsap.to(cursor, {opacity: 1, duration: 0.2}));
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initCustomCursor);
-} else {
-  initCustomCursor();
+// Custom cursor completely removed by user request.
+
+
+// ============================================================================
+// META QUEST WEBXR COMPATIBILITY ENGINE
+// ============================================================================
+var xrRenderer, xrScene, xrCamera, xrTexture, xrMesh;
+var xrController1, xrController2, xrRaycaster;
+var isVRActive = false;
+var lastIntersectedUV = null;
+
+function initWebXR() {
+  const tCanvas = document.createElement('canvas');
+  tCanvas.style.position = 'absolute';
+  tCanvas.style.top = '0';
+  tCanvas.style.left = '0';
+  tCanvas.style.zIndex = '-1';
+  document.body.appendChild(tCanvas);
+
+  xrRenderer = new THREE.WebGLRenderer({ canvas: tCanvas, antialias: true, alpha: true });
+  xrRenderer.setPixelRatio(window.devicePixelRatio);
+  xrRenderer.setSize(window.innerWidth, window.innerHeight);
+  xrRenderer.xr.enabled = true;
+
+  xrScene = new THREE.Scene();
+  xrScene.background = new THREE.Color('#000308'); // Deep void
+  
+  // IMMERSION: Thick Volumetric Fog
+  xrScene.fog = new THREE.FogExp2('#000308', 0.06);
+
+  // IMMERSION: Custom Scrolling Tile Floor
+  const floorCvs = document.createElement('canvas');
+  floorCvs.width = 512; floorCvs.height = 512;
+  const fCtx = floorCvs.getContext('2d');
+  fCtx.fillStyle = '#000000'; fCtx.fillRect(0, 0, 512, 512);
+  fCtx.strokeStyle = '#ffffff'; fCtx.lineWidth = 6;
+  // Draw beautiful glowing tiles
+  for (let i = 0; i <= 512; i += 128) {
+      fCtx.beginPath(); fCtx.moveTo(i, 0); fCtx.lineTo(i, 512); fCtx.stroke();
+      fCtx.beginPath(); fCtx.moveTo(0, i); fCtx.lineTo(512, i); fCtx.stroke();
+  }
+  // Subtle checkerboard fill for experiential depth
+  fCtx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+  for (let x = 0; x < 512; x += 128) {
+      for (let y = 0; y < 512; y += 128) {
+          if ((x / 128 + y / 128) % 2 === 0) fCtx.fillRect(x, y, 128, 128);
+      }
+  }
+  window.xrFloorTex = new THREE.CanvasTexture(floorCvs);
+  window.xrFloorTex.wrapS = THREE.RepeatWrapping;
+  window.xrFloorTex.wrapT = THREE.RepeatWrapping;
+  window.xrFloorTex.repeat.set(25, 25);
+  
+  const floorGeo = new THREE.PlaneGeometry(100, 100);
+  floorGeo.rotateX(-Math.PI / 2); // Lay flat
+  const floorMat = new THREE.MeshBasicMaterial({ 
+      map: window.xrFloorTex, 
+      color: 0xffffff, // Force white tiles 
+      transparent: true, 
+      opacity: 0.5, 
+      blending: THREE.AdditiveBlending 
+  });
+  window.xrGridHelper = new THREE.Mesh(floorGeo, floorMat);
+  window.xrGridHelper.position.y = 0;
+  xrScene.add(window.xrGridHelper);
+
+  xrCamera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
+  
+  // IMMERSION: Massive Wrap-Around IMAX Screen (180 degrees, towering height)
+  const geometry = new THREE.CylinderGeometry(5, 5, 4.5, 80, 1, true, Math.PI / 2, Math.PI);
+  geometry.scale(-1, 1, 1); 
+
+  // Make sure canvas is available
+  const cvs = document.getElementById('mosaic-canvas');
+  xrTexture = new THREE.CanvasTexture(cvs);
+  xrTexture.minFilter = THREE.LinearFilter;
+  
+  const material = new THREE.MeshBasicMaterial({ map: xrTexture, transparent: true, side: THREE.DoubleSide });
+  xrMesh = new THREE.Mesh(geometry, material);
+  xrMesh.position.set(0, 1.8, 0);
+
+  // CREATE 3D VR TOOLTIP
+  const tCv = document.createElement('canvas');
+  tCv.width = 512; tCv.height = 256;
+  vrTooltipCtx = tCv.getContext('2d');
+  vrTooltipTex = new THREE.CanvasTexture(tCv);
+  const tGeo = new THREE.PlaneGeometry(0.8, 0.4);
+  const tMat = new THREE.MeshBasicMaterial({ map: vrTooltipTex, transparent: true, opacity: 0.9, depthTest: false });
+  vrTooltipMesh = new THREE.Mesh(tGeo, tMat);
+  vrTooltipMesh.renderOrder = 9999;
+  vrTooltipMesh.visible = false;
+  xrScene.add(vrTooltipMesh); // Lifted slightly above eye level for dominance
+  xrScene.add(xrMesh);
+
+  // IMMERSION: Ambient Screen Aura (Fake Bloom/Light Bleed)
+  const auraGeo = new THREE.CylinderGeometry(5.2, 5.2, 5.0, 40, 1, true, -Math.PI / 2, Math.PI);
+  auraGeo.scale(-1, 1, 1);
+  // Removed Aura mesh per user request to remove the panel behind the main panel.
+
+  // IMMERSION: Floating Data Stream Particles
+  // IMMERSION: 3D Primitive Rain (Different shapes and colors)
+  const rainCount = 300;
+  const rainGeos = [
+      new THREE.BoxGeometry(0.06, 0.06, 0.06),
+      new THREE.TetrahedronGeometry(0.06),
+      new THREE.OctahedronGeometry(0.05)
+  ];
+  const rainMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 });
+  window.xrRainMeshes = [];
+  
+  for (let g = 0; g < rainGeos.length; g++) {
+      const mesh = new THREE.InstancedMesh(rainGeos[g], rainMat.clone(), rainCount / 3);
+      const dummy = new THREE.Object3D();
+      const color = new THREE.Color();
+      for (let i = 0; i < rainCount / 3; i++) {
+          dummy.position.set((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30);
+          dummy.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+          dummy.updateMatrix();
+          mesh.setMatrixAt(i, dummy.matrix);
+          
+          if (Math.random() > 0.6) {
+              color.setHSL(Math.random(), 0.8, 0.6); // Random bright colors
+          } else {
+              color.setHex(0xffffff); // White
+          }
+          mesh.setColorAt(i, color);
+      }
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      xrScene.add(mesh);
+      window.xrRainMeshes.push(mesh);
+  }
+  
+  window.xrMonoliths = new THREE.Group();
+  const monoGeo = new THREE.BoxGeometry(1, 10, 1);
+  const monoMat = new THREE.MeshBasicMaterial({ color: 0x002211, wireframe: true, transparent: true, opacity: 0.3 });
+  for(let m=0; m<15; m++) {
+    const mono = new THREE.Mesh(monoGeo, monoMat);
+    const mRad = 15 + Math.random() * 20;
+    const mTheta = Math.random() * Math.PI * 2;
+    mono.position.set(mRad * Math.cos(mTheta), (Math.random()-0.5)*20, mRad * Math.sin(mTheta));
+    mono.rotation.y = Math.random() * Math.PI;
+    mono.rotation.x = (Math.random()-0.5) * 0.2;
+    window.xrMonoliths.add(mono);
+  }
+  xrScene.add(window.xrMonoliths);
+
+  
+
+
+  xrController1 = xrRenderer.xr.getController(0);
+  xrController1.addEventListener('select', onXRSelect);
+  xrController1.addEventListener('selectstart', onXRSelectStart);
+  xrController1.addEventListener('selectend', onXRSelectEnd);
+  xrController1.addEventListener('connected', function (event) { this.gamepad = event.data.gamepad; });
+  xrScene.add(xrController1);
+
+  xrController2 = xrRenderer.xr.getController(1);
+  xrController2.addEventListener('select', onXRSelect);
+  xrController2.addEventListener('selectstart', onXRSelectStart);
+  xrController2.addEventListener('selectend', onXRSelectEnd);
+  xrController2.addEventListener('connected', function (event) { this.gamepad = event.data.gamepad; });
+  xrScene.add(xrController2);
+
+  const controllerModelFactory = new XRControllerModelFactory();
+  const grip1 = xrRenderer.xr.getControllerGrip(0);
+  grip1.add(controllerModelFactory.createControllerModel(grip1));
+  xrScene.add(grip1);
+
+  const grip2 = xrRenderer.xr.getControllerGrip(1);
+  grip2.add(controllerModelFactory.createControllerModel(grip2));
+  xrScene.add(grip2);
+
+  const laserGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,-5)]);
+  const laserMat = new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
+  xrController1.add(new THREE.Line(laserGeo, laserMat));
+  xrController2.add(new THREE.Line(laserGeo, laserMat));
+
+  
+  // =======================================================
+  // AWARD-WINNING VFX: Data Clouds & Ambient Energy Motes
+  // =======================================================
+  const cloudCanvas = document.createElement('canvas');
+  cloudCanvas.width = 1024; cloudCanvas.height = 1024;
+  const cCtx = cloudCanvas.getContext('2d');
+  cCtx.fillStyle = 'rgba(0,0,0,0)'; cCtx.fillRect(0,0,1024,1024);
+  cCtx.fillStyle = 'rgba(255,255,255,0.4)';
+  cCtx.font = '16px "Space Mono", monospace';
+  const hex = '0123456789ABCDEF01010101';
+  for(let x = 0; x < 1024; x += 18) {
+      for(let y = 0; y < 1024; y += 20) {
+          if (Math.random() > 0.6) cCtx.fillText(hex[Math.floor(Math.random()*hex.length)], x, y);
+      }
+  }
+  const cloudTex = new THREE.CanvasTexture(cloudCanvas);
+  cloudTex.wrapS = THREE.RepeatWrapping;
+  cloudTex.wrapT = THREE.RepeatWrapping;
+  const cloudMat = new THREE.MeshBasicMaterial({ map: cloudTex, transparent: true, opacity: 0.15, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false });
+  
+  window.dataClouds = [];
+  for(let i = 0; i < 3; i++) {
+      const cloudGeo = new THREE.PlaneGeometry(40, 40);
+      const cloud = new THREE.Mesh(cloudGeo, cloudMat.clone());
+      cloud.rotation.x = Math.PI / 2; // Flat ceiling above head
+      cloud.position.set(0, 3.5 + i * 1.0, 0); // Layered heights: y=4.5, 6.0, 7.5
+      cloud.material.opacity = 0.25 - (i * 0.05); // Fade upper layers
+      xrScene.add(cloud);
+      window.dataClouds.push(cloud);
+  }
+
+  // Energy Motes (Floating ambient fireflies)
+  const moteCount = 200;
+  const motePos = new Float32Array(moteCount * 3);
+  const moteVel = [];
+  for(let i = 0; i < moteCount; i++) {
+      motePos[i*3] = (Math.random() - 0.5) * 15;
+      motePos[i*3+1] = Math.random() * 4; 
+      motePos[i*3+2] = (Math.random() - 0.5) * 15;
+      moteVel.push({ x: (Math.random()-0.5)*0.003, y: (Math.random()-0.5)*0.003, z: (Math.random()-0.5)*0.003 });
+  }
+  const moteGeo = new THREE.BufferGeometry();
+  moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3));
+  const moteMat = new THREE.PointsMaterial({ color: 0x00ff88, size: 0.04, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
+  window.energyMotes = new THREE.Points(moteGeo, moteMat);
+  window.energyMotes.userData.velocities = moteVel;
+  xrScene.add(window.energyMotes);
+  // =======================================================
+
+  xrRaycaster = new THREE.Raycaster();
+
+  
+
+  // ==========================================
+  // CONTEXTUAL HOLO-BILLBOARD
+  // ==========================================
+  const billboardCanvas = document.createElement('canvas');
+  billboardCanvas.width = 1024;
+  billboardCanvas.height = 512;
+  const bbCtx = billboardCanvas.getContext('2d');
+  const bbTex = new THREE.CanvasTexture(billboardCanvas);
+  
+  const bbGeo = new THREE.PlaneGeometry(3, 1.5); // Tidy billboard
+  const bbMat = new THREE.MeshBasicMaterial({ map: bbTex, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
+  window.xrBillboard = new THREE.Mesh(bbGeo, bbMat);
+  
+  window.xrBillboard.position.set(6.0, 1.6, 0.0); // Completely far right
+  window.xrBillboard.rotation.y = -Math.PI/2; // Face inward from the right // Angled inward from the left // Angled toward the user
+  xrScene.add(window.xrBillboard);
+
+  // ==========================================
+  // FLOATING NOTIFICATION HUD
+  // ==========================================
+  const notifCanvas = document.createElement('canvas');
+  notifCanvas.width = 1024;
+  notifCanvas.height = 256;
+  window.notifCtx = notifCanvas.getContext('2d');
+  const notifTex = new THREE.CanvasTexture(notifCanvas);
+  
+  const notifGeo = new THREE.PlaneGeometry(4, 1);
+  const notifMat = new THREE.MeshBasicMaterial({ map: notifTex, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
+  window.xrNotifHUD = new THREE.Mesh(notifGeo, notifMat);
+  
+  // Place it directly above the DOM overlay in front of the user
+  window.xrNotifHUD.position.set(0, -100, 0); // Hide the old HUD completely // Hovering directly above the Live Stats panel
+  window.xrNotifHUD.rotation.y = Math.PI/6; // Same angle as stats panel
+  xrScene.add(window.xrNotifHUD);
+  
+  window.showVRNotification = function(text, isWhale) {
+      window.notifCtx.clearRect(0, 0, 1024, 256);
+      window.notifCtx.fillStyle = isWhale ? 'rgba(255, 0, 0, 0.7)' : 'rgba(0, 255, 136, 0.3)';
+      window.notifCtx.fillRoundedRect = function(x, y, w, h, r) {
+        this.beginPath(); this.moveTo(x+r, y); this.lineTo(x+w-r, y); this.quadraticCurveTo(x+w, y, x+w, y+r);
+        this.lineTo(x+w, y+h-r); this.quadraticCurveTo(x+w, y+h, x+w-r, y+h); this.lineTo(x+r, y+h);
+        this.quadraticCurveTo(x, y+h, x, y+h-r); this.lineTo(x, y+r); this.quadraticCurveTo(x, y, x+r, y); this.fill();
+      };
+      window.notifCtx.fillRoundedRect(20, 20, 984, 216, 20);
+      
+      window.notifCtx.fillStyle = '#ffffff';
+      window.notifCtx.font = isWhale ? 'bold 60px monospace' : 'bold 50px monospace';
+      window.notifCtx.textAlign = 'center';
+      window.notifCtx.fillText(text, 512, 140);
+      notifTex.needsUpdate = true;
+      
+      // Animate the HUD popping in
+      if (typeof gsap !== 'undefined') {
+          // xrNotifHUD gsap sanitized
+          // xrNotifHUD gsap sanitized // Vanish ASAP
+      }
+  };
+
+  
+  // Update it every second to avoid CPU usage
+  setInterval(() => {
+     if (!isVRActive || !window.xrBillboard) return;
+     
+     const blockEl = document.getElementById('latest-block-val');
+     const feeEl = document.getElementById('avg-fee-val');
+     const trendEl = document.getElementById('trend-dominant-val');
+     const modeEl = document.querySelector('.brand h1');
+     
+     const blockVal = blockEl ? blockEl.innerText : '0000000';
+     const feeVal = feeEl ? feeEl.innerText : '0 Gwei';
+     const trendVal = trendEl ? trendEl.innerText : 'Analyzing...';
+     const mode = modeEl ? modeEl.innerText : 'BLOCKCHAIN MOSAIC';
+     
+     bbCtx.clearRect(0, 0, 1024, 512);
+     
+     // Glowing Background Panel
+     bbCtx.fillStyle = 'rgba(4, 6, 8, 0.9)';
+     bbCtx.strokeStyle = '#00ff88';
+     bbCtx.lineWidth = 4;
+     bbCtx.fillRect(10, 10, 1004, 492);
+     bbCtx.strokeRect(10, 10, 1004, 492);
+     
+     bbCtx.fillStyle = '#ffffff';
+     bbCtx.font = 'bold 36px "Space Mono", monospace';
+     bbCtx.textAlign = 'left';
+     bbCtx.fillText("LIVE NETWORK HIGHLIGHTS", 80, 80);
+     
+     if (window.lastBillboardStats) {
+          bbCtx.fillStyle = '#00ff88';
+          bbCtx.font = '32px "Space Mono", monospace';
+          bbCtx.fillText(`CURRENT PAYMENTS: ${window.lastBillboardStats.txCount}`, 80, 160);
+          
+          bbCtx.fillStyle = '#ffffff';
+          bbCtx.fillText(`AMOUNT MOVED: $${window.lastBillboardStats.val.toLocaleString()}`, 80, 220);
+          
+          bbCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+          bbCtx.font = '24px "Outfit", sans-serif';
+          let summary = "Network is stable. Standard transfer volume detected.";
+          if (window.lastBillboardStats.txCount > 500) summary = "High volume activity detected! Congestion increasing.";
+          if (window.lastBillboardStats.val > 50000) summary = "Massive capital migration detected. Whale activity likely.";
+          bbCtx.fillText(`SUMMARY: ${summary}`, 80, 300);
+     } else {
+          bbCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+          bbCtx.font = '28px "Outfit", sans-serif';
+          bbCtx.fillText("WAITING FOR NETWORK...", 80, 160);
+     }
+     
+     bbTex.needsUpdate = true;
+  }, 1000);
+
+
+
+  window.xrAudioListener = new THREE.AudioListener();
+  xrCamera.add(window.xrAudioListener);
+  window.xrHoverSound = new THREE.PositionalAudio(window.xrAudioListener);
+  
+  const osc = window.xrAudioListener.context.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(150, window.xrAudioListener.context.currentTime);
+  osc.start(0);
+  window.xrHoverSound.setNodeSource(osc);
+  window.xrHoverSound.setRefDistance(1);
+  window.xrHoverSound.setVolume(0);
+  xrMesh.add(window.xrHoverSound);
+  const hlGeo = new THREE.PlaneGeometry(0.3, 0.3);
+  const hlMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+  xrHighlightMesh = new THREE.Mesh(hlGeo, hlMat);
+  xrHighlightMesh.visible = false;
+  xrScene.add(xrHighlightMesh);
+
+  // ==========================================
+  // DEEP AMBIENT DRONE
+  // ==========================================
+  window.xrDroneSound = new THREE.PositionalAudio(window.xrAudioListener);
+  const droneOsc = window.xrAudioListener.context.createOscillator();
+  const droneGain = window.xrAudioListener.context.createGain();
+  
+  droneOsc.type = 'sine';
+  droneOsc.frequency.setValueAtTime(45, window.xrAudioListener.context.currentTime); // Deep bass
+  
+  // Create an LFO to modulate the drone volume slightly
+  const lfo = window.xrAudioListener.context.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.setValueAtTime(0.1, window.xrAudioListener.context.currentTime);
+  const lfoGain = window.xrAudioListener.context.createGain();
+  lfoGain.gain.setValueAtTime(0.2, window.xrAudioListener.context.currentTime);
+  lfo.connect(lfoGain);
+  lfoGain.connect(droneGain.gain);
+  
+  droneGain.gain.setValueAtTime(0.3, window.xrAudioListener.context.currentTime);
+  droneOsc.connect(droneGain);
+  
+  droneOsc.start(0);
+  lfo.start(0);
+  
+  window.xrDroneSound.setNodeSource(droneGain);
+  window.xrDroneSound.setRefDistance(10);
+  window.xrDroneSound.setVolume(1.0); // Ambient is controlled by gain
+  xrScene.add(window.xrDroneSound);
+
+
+  const vrBtn = document.createElement('button');
+  vrBtn.innerText = 'ENTER VR (DOM OVERLAY)';
+  vrBtn.style.position = 'fixed';
+  vrBtn.style.bottom = '20px';
+  vrBtn.style.right = '20px';
+  vrBtn.style.zIndex = '99999';
+  vrBtn.style.fontFamily = "'Space Mono', monospace";
+  vrBtn.style.background = 'rgba(0, 255, 136, 0.15)';
+  vrBtn.style.color = '#00ff88';
+  vrBtn.style.border = '1px solid #00ff88';
+  vrBtn.style.borderRadius = '4px';
+  vrBtn.style.padding = '12px 24px';
+  vrBtn.style.cursor = 'pointer';
+  vrBtn.style.fontWeight = 'bold';
+  
+  if ('xr' in navigator) {
+    navigator.xr.isSessionSupported('immersive-vr').then(supported => {
+      if (supported) {
+        document.body.appendChild(vrBtn);
+        let currentSession = null;
+window.xrActiveBlocks = [];
+        vrBtn.onclick = () => {
+          if (currentSession === null) {
+            navigator.xr.requestSession('immersive-vr', {
+              optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking', 'dom-overlay'],
+              domOverlay: { root: document.body }
+            }).then(session => {
+              currentSession = session;
+              vrBtn.innerText = 'EXIT VR';
+              session.addEventListener('end', () => {
+                currentSession = null;
+                vrBtn.innerText = 'ENTER VR (DOM OVERLAY)';
+              });
+              xrRenderer.xr.setSession(session);
+            });
+          } else {
+            currentSession.end();
+          }
+        };
+      } else {
+        vrBtn.innerText = 'VR NOT SUPPORTED';
+        vrBtn.style.opacity = '0.5';
+        vrBtn.style.cursor = 'not-allowed';
+        document.body.appendChild(vrBtn);
+      }
+    });
+  }
+
+  xrRenderer.xr.addEventListener('sessionstart', () => {
+    isVRActive = true;
+    init8DAudio();
+  // PLAY A MASSIVE WELCOME ANIMATION SO THEY KNOW EFFECTS ARE WORKING
+  setTimeout(() => {
+      if (typeof window.showVRNotification === 'function') {
+          window.showVRNotification('VR SYSTEMS ONLINE', false);
+      }
+      
+      // ELEGANT DEMO SLIDE SO THEY IMMEDIATELY SEE THE ANIMATION WORKING
+      if (typeof THREE !== 'undefined' && typeof xrScene !== 'undefined') {
+                      let colorStr = 'hsl(210, 100%, 50%)';
+                      if (typeof PALETTES !== 'undefined' && typeof currentPalette !== 'undefined' && newBlock.dominant_type) {
+                          colorStr = PALETTES[currentPalette][newBlock.dominant_type] || PALETTES[currentPalette]['default'] || colorStr;
+                      }
+                      const smashColor = new THREE.Color().setStyle(colorStr);
+                      // Make each block unique based on transaction volume
+                      const h = 0.4 + Math.random() * 0.8;
+                      const blockGeo = new THREE.BoxGeometry(0.6, h, 0.6);
+                      const blockMat = new THREE.MeshBasicMaterial({ color: smashColor });
+                      const physicalBlock = new THREE.Mesh(blockGeo, blockMat);
+                      // Start horizontally on the far right
+                      physicalBlock.position.set(3.5, 1.6, -1.5);
+                      xrScene.add(physicalBlock);
+                      if(!window.xrActiveBlocks) window.xrActiveBlocks = []; window.xrActiveBlocks.push({
+                          block: newBlock,
+                          mesh: physicalBlock, 
+                          startX: 3.5,
+                          targetX: 0.0,
+                          targetY: 1.8, 
+                          targetZ: -9.5, 
+                          progress: 0
+                      });
+                  }
+      
+      if (window.xrGridHelper) { window.xrGridHelper.position.y = 0; }
+  }, 1000);
+    xrRenderer.setAnimationLoop(draw);
+    const vrStyle = document.createElement('style');
+    vrStyle.id = 'vr-immersive-style';
+    vrStyle.innerHTML = `
+      html, body, #app-container, .main-layout, .canvas-container {
+        background: transparent !important; background-color: transparent !important; box-shadow: none !important;
+      }
+      #mosaic-canvas { opacity: 0.001 !important; pointer-events: none !important; }
+      .app-header { 
+        background: rgba(8, 9, 12, 0.85) !important; 
+        border-bottom: 2px solid #00ff88 !important; 
+        transform: scale(2.0) translateY(40px) !important;
+        transform-origin: top center;
+        z-index: 999999 !important;
+      }
+      
+      /* Make the Blend selector large and visible */
+      .blend-selector {
+        transform: scale(2.5) translateY(-50%) !important;
+        right: 40px !important;
+        z-index: 999999 !important;
+      }
+      
+      /* Make sure the Archive Drawer is front and center in VR, not off to the side */
+      .archive-drawer {
+        width: 600px !important;
+        left: 50% !important;
+        transform: translateX(-50%) translateY(100%) !important;
+        transition: transform 0.4s ease !important;
+        bottom: 0 !important;
+        top: auto !important;
+        border-top: 2px solid #00ff88 !important;
+        border-left: 2px solid #00ff88 !important;
+        border-right: 2px solid #00ff88 !important;
+      }
+      .archive-drawer.open {
+        transform: translateX(-50%) translateY(0) !important;
+      }
+      
+      /* Make the Settings sidebar pop out on the left in VR */
+      #details-sidebar {
+        width: 400px !important;
+        left: 0 !important;
+        right: auto !important;
+        transform: translateX(-100%) !important;
+        border-right: 2px solid #00ff88 !important;
+      }
+      #details-sidebar.open {
+        transform: translateX(0) !important;
+      }
+      .playback-controls { background: rgba(8, 9, 12, 0.8) !important; border: 1px solid rgba(0, 255, 136, 0.4) !important; }
+      
+      /* Make sure the sidebars and drawers are extremely visible and float like HUDs */
+      #details-sidebar, .archive-drawer {
+        background: rgba(4, 6, 8, 0.95) !important;
+        border-left: 1px solid #00ff88 !important;
+        border-right: 1px solid #00ff88 !important;
+        box-shadow: 0 0 30px rgba(0, 255, 136, 0.2) !important;
+        z-index: 999999 !important;
+      }
+      
+      /* The tooltip needs to pop heavily against the 3D background */
+      #hover-tooltip {
+        background: rgba(0, 0, 0, 0.95) !important;
+        border: 2px solid #00ff88 !important;
+        box-shadow: 0 0 20px rgba(0, 255, 136, 0.5) !important;
+        transform: scale(1.5) !important; /* Make it larger in VR for readability */
+        z-index: 999999 !important;
+      }
+      
+      /* Buttons need to be highly visible */
+      header button, .app-header button {
+        background: rgba(0, 255, 136, 0.1) !important;
+        border: 1px solid rgba(0, 255, 136, 0.4) !important;
+        color: #00ff88 !important;
+        font-weight: bold !important;
+      }
+      ::-webkit-scrollbar { display: none; }
+    `;
+    document.head.appendChild(vrStyle);
+  });
+
+  xrRenderer.xr.addEventListener('sessionend', () => {
+    isVRActive = false;
+    xrRenderer.setAnimationLoop(null);
+    requestAnimationFrame(draw);
+    const vrStyle = document.getElementById('vr-immersive-style');
+    if (vrStyle) vrStyle.remove();
+  });
 }
 
-// EXPOSE TO WINDOW FOR WEBXR
-window.THEMES = THEMES;
-window.currentTheme = currentTheme;
-window.currentPalette = currentPalette;
+function onXRSelect(event) {
+  if (lastIntersectedUV) {
+    // Flash the laser green on click for visual feedback
+    if (xrController1 && xrController1.children[0]) xrController1.children[0].material.color.setHex(0xffffff);
+    setTimeout(() => { if (xrController1 && xrController1.children[0]) xrController1.children[0].material.color.setHex(0x00ff88); }, 150);
+    
+    const syntheticEvent = new MouseEvent('click', {
+      clientX: lastIntersectedUV.x * window.innerWidth,
+      clientY: (1 - lastIntersectedUV.y) * window.innerHeight,
+      bubbles: true, cancelable: true, view: window
+    });
+    const cvs = document.getElementById('mosaic-canvas');
+    if (cvs) cvs.dispatchEvent(syntheticEvent);
+  }
+}
+
+function updateXRInteraction() {
+  if (!isVRActive || !xrRenderer.xr.isPresenting) return;
+  
+  if (xrTexture) xrTexture.needsUpdate = true;
+
+      
+    
+
+  
+
+  if (window.xrActiveBlocks) {
+      for (let i = window.xrActiveBlocks.length - 1; i >= 0; i--) {
+          const anim = window.xrActiveBlocks[i];
+          
+          // AWARD-WINNING: GSAP-Style Ease Physics
+          anim.progress += 0.008; // ~2 seconds for full majestic lift
+          
+          if (anim.progress <= 1.0) {
+              const easeP = easeOutBack(anim.progress); // Overshoots slightly and settles
+              const easeLift = easeInOutCubic(anim.progress);
+              
+              // Smoothly interpolate position
+              anim.mesh.position.x = anim.startX + (anim.targetX - anim.startX) * easeP;
+              anim.mesh.position.z = anim.startZ + (anim.targetZ - anim.startZ) * easeP;
+              
+              // Lift off floor gracefully, then arc into wall
+              anim.mesh.position.y = anim.startY + (anim.targetY - anim.startY) * easeP + Math.sin(anim.progress * Math.PI) * 1.5; 
+              
+              // Smoothly rotate from flat-on-floor to upright-on-wall
+              anim.mesh.rotation.x = anim.startRotX + (anim.targetRotX - anim.startRotX) * easeP;
+              anim.mesh.rotation.y = anim.startRotY + (anim.targetRotY - anim.startRotY) * easeP;
+              anim.mesh.rotation.z = anim.startRotZ + (anim.targetRotZ - anim.startRotZ) * easeP;
+              
+              // Emit trail sparks!
+              if (Math.random() > 0.4) spawnTrailSpark(anim.mesh.position.x, anim.mesh.position.y, anim.mesh.position.z, anim.color);
+              
+              if (anim.notif) {
+                 anim.notif.position.y += 0.005; 
+                 if (anim.progress < 0.2) {
+                     anim.notif.material.opacity = anim.progress * 5.0; // Fade in smoothly
+                 } else if (anim.progress > 0.7) { 
+                     anim.notif.material.opacity = (1.0 - anim.progress) / 0.3; // Fade out
+                 } else {
+                     anim.notif.material.opacity = 1.0;
+                 }
+              }
+          } else {
+              // IMPACT!
+              if (!anim.hasImpacted) { 
+                 anim.hasImpacted = true;
+                 spawnImpactRipple(anim.targetX, anim.targetY, anim.targetZ, anim.color);
+              }
+              
+              if (anim.notif) { xrScene.remove(anim.notif); anim.notif.material.dispose(); anim.notif.geometry.dispose(); }
+              
+              // Melt smoothly into the wall
+              anim.mesh.scale.multiplyScalar(0.85);
+              if (anim.mesh.scale.x < 0.05) {
+                  xrScene.remove(anim.mesh);
+                  if (anim.mesh.geometry) anim.mesh.geometry.dispose();
+                  if (anim.mesh.material) anim.mesh.material.dispose();
+                  // Clean up wireframe
+                  if (anim.mesh.children.length > 0) {
+                      anim.mesh.children[0].geometry.dispose();
+                      anim.mesh.children[0].material.dispose();
+                  }
+                  window.xrActiveBlocks.splice(i, 1);
+              }
+          }
+      }
+  }
+  
+  // Update Trails
+  if (window.xrTrails) {
+      for (let i = window.xrTrails.length - 1; i >= 0; i--) {
+          const spark = window.xrTrails[i];
+          spark.life -= 0.02;
+          spark.mesh.position.y -= 0.01;
+          spark.mesh.scale.multiplyScalar(0.9);
+          spark.mesh.material.opacity = spark.life;
+          if (spark.life <= 0) {
+              xrScene.remove(spark.mesh);
+              spark.mesh.geometry.dispose();
+              spark.mesh.material.dispose();
+              window.xrTrails.splice(i, 1);
+          }
+      }
+  }
+  
+  // Update Ripples
+  if (window.xrRipples) {
+      for (let i = window.xrRipples.length - 1; i >= 0; i--) {
+          const rip = window.xrRipples[i];
+          rip.scale += 0.2;
+          rip.opacity -= 0.04;
+          rip.mesh.scale.set(rip.scale, rip.scale, 1);
+          rip.mesh.material.opacity = rip.opacity;
+          if (rip.opacity <= 0) {
+              xrScene.remove(rip.mesh);
+              rip.mesh.geometry.dispose();
+              rip.mesh.material.dispose();
+              window.xrRipples.splice(i, 1);
+          }
+      }
+  }
+
+  if (window.xrFloorTex && window.xrGridHelper) {
+      window.xrFloorTex.offset.y -= 0.015; // Scroll tiles continuously
+      
+      const intensity = 0.5 + Math.sin(Date.now() * 0.002) * 0.2;
+      // Keep floor white/grey for better contrast, only pulsing brightness
+      window.xrGridHelper.material.color.setHex(0xffffff).multiplyScalar(intensity * 1.5);
+  }
+  if (window.xrRainMeshes) {
+      const dummy = new THREE.Object3D();
+      window.xrRainMeshes.forEach(mesh => {
+          for (let i = 0; i < mesh.count; i++) {
+              mesh.getMatrixAt(i, dummy.matrix);
+              dummy.position.setFromMatrixPosition(dummy.matrix);
+              dummy.rotation.setFromRotationMatrix(dummy.matrix);
+              
+              dummy.position.y -= 0.05; // Rain falls steadily
+              dummy.rotation.x += 0.02;
+              dummy.rotation.y += 0.03;
+              
+              if (dummy.position.y < -5) {
+                  dummy.position.y = 15; // Wrap back to top
+                  dummy.position.x = (Math.random() - 0.5) * 30;
+              }
+              
+              dummy.updateMatrix();
+              mesh.setMatrixAt(i, dummy.matrix);
+          }
+          mesh.instanceMatrix.needsUpdate = true;
+      });
+  }
+  
+  let intersected = false;
+  [xrController1, xrController2].forEach(controller => {
+    if (!controller) return;
+    const tempMatrix = new THREE.Matrix4();
+    tempMatrix.identity().extractRotation(controller.matrixWorld);
+    xrRaycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+    xrRaycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+    
+    
+    
+    // Accurate VR Raycasting to 2D Canvas Tooltips
+    const hits = xrRaycaster.intersectObject(xrMesh);
+    if (hits.length > 0) {
+      intersected = true;
+      const uv = hits[0].uv;
+      
+      if (lastIntersectedUV && (Math.abs(lastIntersectedUV.x - uv.x) > 0.01 || Math.abs(lastIntersectedUV.y - uv.y) > 0.01)) {
+         if (controller.gamepad && controller.gamepad.hapticActuators && controller.gamepad.hapticActuators.length > 0) {
+            controller.gamepad.hapticActuators[0].pulse(0.1, 10);
+         }
+      }
+      if (window.xrHoverSound) window.xrHoverSound.setVolume(0.05);
+      
+      lastIntersectedUV = uv;
+      
+      // Calculate exact pixel position on the internal canvas regardless of CSS scaling!
+      const cvs = document.getElementById('mosaic-canvas');
+      if (cvs) {
+         const rect = cvs.getBoundingClientRect();
+         // The UV maps exactly to the internal canvas resolution width/height
+         // We add rect.left/top so that when getBoundingClientRect() is called inside the listener, it subtracts it perfectly back to the raw internal coordinate!
+         // Force window dimensions because the canvas might be structurally hidden but fills the window
+         const exactClientX = uv.x * window.innerWidth;
+         const exactClientY = (1 - uv.y) * window.innerHeight;
+         
+
+         if (xrHighlightMesh) {
+             xrHighlightMesh.visible = true;
+             xrHighlightMesh.position.copy(hits[0].point);
+             xrHighlightMesh.position.multiplyScalar(0.98); 
+             xrHighlightMesh.lookAt(xrCamera.position);
+             xrHighlightMesh.material.opacity = 0.4 + Math.sin(Date.now() * 0.01) * 0.2;
+             if (window.currentThemeObj && window.currentThemeObj.accent) {
+                 xrHighlightMesh.material.color.setStyle(window.currentThemeObj.accent);
+             }
+         }
+         const syntheticEvent = new MouseEvent('mousemove', {
+           clientX: exactClientX,
+           clientY: exactClientY,
+           bubbles: true, cancelable: true, view: window
+         });
+         cvs.dispatchEvent(syntheticEvent);
+      }
+      
+      // Update 3D VR Tooltip
+      if (typeof vrTooltipMesh !== 'undefined' && vrTooltipCtx) {
+          const domTooltip = document.getElementById('hover-tooltip');
+          if (domTooltip && domTooltip.classList.contains('visible')) {
+              vrTooltipCtx.clearRect(0, 0, 512, 256);
+              vrTooltipCtx.fillStyle = 'rgba(8,9,12,0.95)';
+              vrTooltipCtx.beginPath();
+              vrTooltipCtx.rect(0, 0, 512, 256);
+              vrTooltipCtx.fill();
+              vrTooltipCtx.strokeStyle = 'rgba(0,255,136,0.5)';
+              vrTooltipCtx.lineWidth = 4;
+              vrTooltipCtx.stroke();
+              
+              vrTooltipCtx.fillStyle = '#ffffff';
+              vrTooltipCtx.font = '24px monospace';
+              
+              const lines = domTooltip.innerText.split('\n').filter(l => l.trim().length > 0);
+              let y = 50;
+              lines.forEach(line => {
+                  vrTooltipCtx.fillText(line.substring(0, 40), 30, y);
+                  y += 40;
+              });
+              
+              vrTooltipTex.needsUpdate = true;
+              vrTooltipMesh.visible = true;
+              
+              vrTooltipMesh.position.copy(hits[0].point);
+              vrTooltipMesh.position.z += 0.2;
+              vrTooltipMesh.position.y += 0.3;
+              vrTooltipMesh.lookAt(xrCamera.position);
+          } else {
+              vrTooltipMesh.visible = false;
+          }
+      }
+    }
+
+    
+
+  });
+  
+  if (!intersected) {
+    if (typeof vrTooltipMesh !== 'undefined' && vrTooltipMesh) vrTooltipMesh.visible = false;
+    if (typeof xrHighlightMesh !== 'undefined' && xrHighlightMesh) xrHighlightMesh.visible = false;
+  }
+  if (!intersected && lastIntersectedUV) {
+    lastIntersectedUV = null;
+    if (window.xrHoverSound) window.xrHoverSound.setVolume(0);
+    const hoverTooltip = document.getElementById('hover-tooltip');
+    if (hoverTooltip) hoverTooltip.style.visibility = 'hidden';
+  }
+  
+}
+
+setTimeout(initWebXR, 500);
+
+
+// Start in Focus Mode by default as requested
+
+
+
+// AWARD-WINNING VR FX: Interactive Ripple Blaster & Billboard Grab
+window.grabbedObject = null;
+window.grabbingController = null;
+
+function onXRSelectStart(event) {
+    const controller = event.target;
+    const tempMatrix = new THREE.Matrix4();
+    tempMatrix.identity().extractRotation(controller.matrixWorld);
+    xrRaycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+    xrRaycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+    
+    // Check if aiming at Billboard
+    if (window.xrBillboard) {
+        const intersects = xrRaycaster.intersectObject(window.xrBillboard);
+        if (intersects.length > 0) {
+            window.grabbedObject = window.xrBillboard;
+            window.grabbingController = controller;
+            controller.attach(window.xrBillboard); // Pick it up
+            if (navigator.vibrate) navigator.vibrate(50);
+            return;
+        }
+    }
+    
+    // Interactive Floor Blaster
+    const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0.6); // Ground at y = -0.6
+    const intersectPoint = new THREE.Vector3();
+    if (xrRaycaster.ray.intersectPlane(floorPlane, intersectPoint)) {
+        spawnImpactRipple(intersectPoint.x, -0.59, intersectPoint.z, '#00e5ff');
+        if (navigator.vibrate) navigator.vibrate(20);
+    }
+}
+
+function onXRSelectEnd(event) {
+    if (window.grabbedObject && window.grabbingController === event.target) {
+        xrScene.attach(window.grabbedObject); // Drop it
+        window.grabbedObject = null;
+        window.grabbingController = null;
+    }
+}
