@@ -3087,3 +3087,8 @@ if (document.readyState === 'loading') {
 } else {
   initCustomCursor();
 }
+
+// EXPOSE TO WINDOW FOR WEBXR
+window.THEMES = THEMES;
+window.currentTheme = currentTheme;
+window.currentPalette = currentPalette;

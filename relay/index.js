@@ -3,6 +3,7 @@ import { WebSocketServer } from 'ws';
 import { ethers } from 'ethers';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { saveBlock, getHistory, getBlocksForDate } from './db.js';
 
@@ -24,6 +25,40 @@ app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
   next();
+});
+
+// Serve the front-end from this same origin. The WebSocket below is attached
+// to this very HTTP server, so a single tunnel then carries both the files and
+// the live block feed — which is what a headset needs, since it cannot reach
+// localhost:8086 and the client derives its socket URL from window.location.
+app.use(express.static(path.join(__dirname, '../display'), {
+  // no-store, not just max-age=0: the Quest Browser will happily serve a
+  // revalidated-but-stale module, which looks exactly like "my changes did
+  // not ship". This is a dev rig, so correctness beats caching.
+  etag: false,
+  lastModified: false,
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-store, must-revalidate')
+}));
+
+// XR diagnostics sink. There is no console inside a headset, so the page
+// posts what its input layer is actually doing and it lands in a file that can
+// be read from the outside. Dev rig only.
+app.use(express.json({ limit: '256kb' }));
+app.post('/xrlog', (req, res) => {
+  try {
+    const line = JSON.stringify({ t: new Date().toISOString(), ...req.body }) + '\n';
+    fs.appendFileSync(path.join(__dirname, 'xr-diag.log'), line);
+  } catch (e) {
+    console.error('xrlog write failed', e);
+  }
+  res.json({ ok: true });
+});
+app.get('/xrlog', (req, res) => {
+  try {
+    res.type('text/plain').send(fs.readFileSync(path.join(__dirname, 'xr-diag.log'), 'utf8'));
+  } catch (e) {
+    res.type('text/plain').send('(empty)');
+  }
 });
 
 // Health check endpoint
@@ -84,6 +119,20 @@ async function initializeServer() {
     } catch (err) {
       console.error('Error fetching block history:', err);
     }
+
+    // Control channel. A companion page (control.html) sends {type:'control'}
+    // and the relay fans it out to every other client, which is how a laptop
+    // or phone drives the settings of a headset that is already in a session.
+    // Nothing here touches block data; it is a pass-through.
+    ws.on('message', (raw) => {
+      let msg;
+      try { msg = JSON.parse(raw.toString()); } catch (e) { return; }
+      if (!msg || msg.type !== 'control') return;
+      const payload = JSON.stringify(msg);
+      wss.clients.forEach((client) => {
+        if (client !== ws && client.readyState === 1) client.send(payload);
+      });
+    });
 
     ws.on('close', () => {
       console.log('Client disconnected');

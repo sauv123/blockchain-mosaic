@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "type": "module",
   "dependencies": {
+    "acorn": "^8.18.0",
     "express": "^4.19.2"
   },
   "scripts": {
-    "start": "node -e \"import express from 'express'; const basePort = Number(process.env.PORT || 3000); const app = express(); app.use(express.static('.')); const tryListen = (port) => { const server = app.listen(port, () => console.log('Display server running at http://localhost:' + port)); server.on('error', (err) => { if (err.code === 'EADDRINUSE') { console.warn('Port ' + port + ' is already in use. Retrying on ' + (port + 1) + '...'); server.close(); tryListen(port + 1); } else { console.error(err); process.exit(1); } }); }; tryListen(basePort);\""
+    "start": "node -e \"import express from 'express'; const basePort = Number(process.env.PORT || 3000); const app = express(); app.get('/go', (req, res) => res.redirect('https://77b81170a1a70e.lhr.life/quest.html')); app.use(express.static('.')); const tryListen = (port) => { const server = app.listen(port, '0.0.0.0', () => console.log('Display server running at http://0.0.0.0:' + port)); server.on('error', (err) => { if (err.code === 'EADDRINUSE') { console.warn('Port ' + port + ' is in use. Retrying on ' + (port + 1)); server.close(); tryListen(port + 1); } else { console.error(err); process.exit(1); } }); }; tryListen(basePort);\""
   }
 }

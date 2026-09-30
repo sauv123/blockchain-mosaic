@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Daily Summary - Dominant Color Solid Blocks</title>
+  <style>
+    :root {
+      --bg: #08090C;
+      --text: #ffffff;
+      --border: rgba(255,255,255,0.1);
+    }
+    body {
+      margin: 0; padding: 0; background-color: var(--bg); color: var(--text);
+      font-family: 'Space Mono', monospace; display: flex; flex-direction: column;
+      height: 100vh; overflow: hidden;
+    }
+    header {
+      padding: 20px 40px; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+      background: rgba(8,9,12,0.9); z-index: 10;
+    }
+    .brand { font-size: 14px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; }
+    .controls { display: flex; gap: 20px; align-items: center; }
+    select, button {
+      background: transparent; border: 1px solid var(--border); color: var(--text);
+      font-family: 'Space Mono', monospace; font-size: 12px; padding: 8px 16px;
+      cursor: pointer; border-radius: 4px; text-transform: uppercase;
+      transition: all 0.2s;
+    }
+    select:hover { border-color: rgba(255,255,255,0.5); }
+    
+    .workspace {
+      flex: 1; display: flex; justify-content: center; align-items: center;
+      position: relative;
+    }
+    
+    canvas {
+      border-radius: 12px;
+      box-shadow: 0 30px 100px rgba(0,0,0,0.9);
+      background: #0d0f14;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    
+    .info {
+      position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+      font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 300;
+      opacity: 0.7; letter-spacing: 0.05em; text-align: center; max-width: 600px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">Dominant Color Synthesis</div>
+    <div class="controls">
+      <span>Color Palette:</span>
+      <select id="palette-select">
+        <option value="sunset">Cyberpunk Sunset</option>
+        <option value="forest">Forest Meadow</option>
+        <option value="electric">Classic Electric Blue</option>
+        <option value="neon">Neon Tokyo</option>
+      </select>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <canvas id="canvas" width="1200" height="700"></canvas>
+    <div class="info">
+      Each block's entire subpixel grid has been collapsed into a single solid color, mathematically derived from its maximum transaction type.
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const paletteSelect = document.getElementById('palette-select');
+
+    // Define the exact color palettes from the app
+    const PALETTES = {
+      'sunset': {
+        'Plain Transfer': '#8A2BE2', // Purple
+        'Token Swap': '#FF4500',     // Orange/Red
+        'NFT Mint': '#FFD700',       // Gold
+        'Other': '#4B0082'
+      },
+      'forest': {
+        'Plain Transfer': '#2E8B57', // SeaGreen
+        'Token Swap': '#8FBC8F',     // DarkSeaGreen
+        'NFT Mint': '#F0E68C',       // Khaki
+        'Other': '#006400'
+      },
+      'electric': {
+        'Plain Transfer': '#00BFFF', // DeepSkyBlue
+        'Token Swap': '#1E90FF',     // DodgerBlue
+        'NFT Mint': '#00FFFF',       // Cyan
+        'Other': '#000080'
+      },
+      'neon': {
+        'Plain Transfer': '#FF1493', // DeepPink
+        'Token Swap': '#00FF00',     // Lime
+        'NFT Mint': '#00FFFF',       // Cyan
+        'Other': '#8A2BE2'
+      }
+    };
+
+    // Simulate 1200 blocks (e.g. roughly 4 hours of intense activity)
+    let blocks = [];
+    const CATEGORIES = ['Plain Transfer', 'Token Swap', 'NFT Mint', 'Other'];
+
+    function generateData() {
+      blocks = [];
+      for (let i = 0; i < 1200; i++) {
+        // Generate random volumes for each category in this block
+        const txs = {
+          'Plain Transfer': Math.random() * 100,
+          'Token Swap': Math.random() * 80,
+          'NFT Mint': Math.random() * 30,
+          'Other': Math.random() * 10
+        };
+        
+        // Sometimes bias heavily towards one to create clusters
+        if (Math.random() < 0.2) txs['Token Swap'] += 150; 
+        if (Math.random() < 0.1) txs['NFT Mint'] += 100;
+
+        // Find the Dominant Category (The "Maximum Color")
+        let maxCategory = CATEGORIES[0];
+        let maxVal = txs[CATEGORIES[0]];
+        for (let cat of CATEGORIES) {
+          if (txs[cat] > maxVal) {
+            maxVal = txs[cat];
+            maxCategory = cat;
+          }
+        }
+        
+        // Calculate an opacity/intensity based on total volume
+        const totalVolume = txs['Plain Transfer'] + txs['Token Swap'] + txs['NFT Mint'] + txs['Other'];
+        const intensity = Math.min(1.0, 0.4 + (totalVolume / 300)); // Ranges from 0.4 to 1.0
+
+        blocks.push({
+          dominantCategory: maxCategory,
+          intensity: intensity
+        });
+      }
+    }
+
+    function render(paletteKey) {
+      const palette = PALETTES[paletteKey];
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Design settings
+      const cols = 40;
+      const rows = 30;
+      const padding = 40; // canvas inner padding
+      
+      const availableW = canvas.width - (padding * 2);
+      const availableH = canvas.height - (padding * 2);
+      
+      const gap = 6;
+      const sizeX = (availableW - (gap * (cols - 1))) / cols;
+      const sizeY = (availableH - (gap * (rows - 1))) / rows;
+      const size = Math.min(sizeX, sizeY); // Keep them square
+      
+      // Center the grid perfectly
+      const gridW = (cols * size) + ((cols - 1) * gap);
+      const gridH = (rows * size) + ((rows - 1) * gap);
+      const startX = (canvas.width - gridW) / 2;
+      const startY = (canvas.height - gridH) / 2;
+
+      blocks.forEach((block, index) => {
+        const col = index % cols;
+        const row = Math.floor(index / cols);
+        
+        const x = startX + (col * (size + gap));
+        const y = startY + (row * (size + gap));
+        
+        const baseColor = palette[block.dominantCategory];
+        
+        // Design-Oriented Rendering:
+        // 1. Convert hex to RGBA to apply intensity
+        const hex = baseColor.replace('#', '');
+        const r = parseInt(hex.substring(0,2), 16);
+        const g = parseInt(hex.substring(2,4), 16);
+        const b = parseInt(hex.substring(4,6), 16);
+        
+        ctx.beginPath();
+        // Modern UI: Rounded squares
+        ctx.roundRect(x, y, size, size, 4);
+        
+        // Fill with intensity
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${block.intensity})`;
+        
+        // Add a premium glowing bloom to high-intensity blocks
+        if (block.intensity > 0.8) {
+          ctx.shadowColor = `rgba(${r}, ${g}, ${b}, 0.8)`;
+          ctx.shadowBlur = 12;
+        } else {
+          ctx.shadowBlur = 0;
+        }
+        
+        ctx.fill();
+        
+        // Subtle top glass highlight
+        ctx.beginPath();
+        ctx.roundRect(x, y, size, size / 2, [4, 4, 0, 0]);
+        ctx.fillStyle = `rgba(255,255,255, 0.05)`;
+        ctx.shadowBlur = 0;
+        ctx.fill();
+      });
+    }
+
+    paletteSelect.addEventListener('change', (e) => {
+      render(e.target.value);
+    });
+
+    // Init
+    generateData();
+    render('sunset');
+
+  </script>
+</body>
+</html>

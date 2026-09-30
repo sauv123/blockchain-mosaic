@@ -1,0 +1,43 @@
+const puppeteer = require('puppeteer');
+
+(async () => {
+  const browser = await puppeteer.launch();
+  const page = await browser.newPage();
+  
+  page.on('console', msg => console.log('BROWSER LOG:', msg.text()));
+  page.on('pageerror', err => console.log('BROWSER ERROR:', err.message));
+  
+  await page.goto('http://localhost:3001/mosaic.html', { waitUntil: 'networkidle2' });
+  await new Promise(r => setTimeout(r, 2000));
+  
+  console.log("--- Clicking Settings & Archives (to open calendar) ---");
+  await page.click('#archive-toggle-btn');
+  await new Promise(r => setTimeout(r, 1000));
+  
+  console.log("--- Clicking a Calendar Day ---");
+  // The days have class .calendar-day. We click the 15th for example, or any available day.
+  const days = await page.$$('.calendar-day:not(.empty-day)');
+  if (days.length > 0) {
+      await days[days.length - 1].click();
+  } else {
+      console.log("No clickable days found!");
+  }
+  await new Promise(r => setTimeout(r, 2000));
+  
+  console.log("--- Moving Timeline Slider ---");
+  const slider = await page.$('#playback-slider');
+  if (slider) {
+      // simulate moving slider
+      await page.evaluate(() => {
+          const s = document.getElementById('playback-slider');
+          s.value = 12; // Noon
+          s.dispatchEvent(new Event('input'));
+          s.dispatchEvent(new Event('change'));
+      });
+  } else {
+      console.log("Timeline slider not found!");
+  }
+  await new Promise(r => setTimeout(r, 2000));
+  
+  await browser.close();
+})();

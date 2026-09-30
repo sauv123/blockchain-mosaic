@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>/trace XR — Space</title>
+  <meta name="description" content="The real /trace website, running unmodified, inside an immersive WebXR room.">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+  <!-- Vendored, not CDN: a headset that cannot reach cdnjs would silently
+       render no site UI at all, which is indistinguishable from "it is broken". -->
+  <script src="xr/vendor/html2canvas.min.js"></script>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./xr/vendor/three.module.js",
+        "three/addons/": "./xr/vendor/addons/"
+      }
+    }
+  </script>
+
+  <style>
+    html, body {
+      margin: 0; padding: 0; height: 100%; overflow: hidden;
+      background: #000308; color: #e2e2da;
+      font-family: 'Outfit', system-ui, sans-serif;
+    }
+
+    #xr-root { position: fixed; inset: 0; }
+    #xr-root canvas { display: block; width: 100%; height: 100%; }
+
+    /*
+      The real site lives in this iframe at a fixed desktop viewport. It has to
+      stay a painted, non-hidden element: a display:none or zero-size iframe has
+      its requestAnimationFrame throttled to a stop by the browser, which would
+      freeze the mosaic. So it is parked behind the WebGL canvas at near-zero
+      opacity — laid out and ticking, but never seen directly.
+    */
+    #site-host {
+      position: fixed;
+      top: 0; left: 0;
+      width: 1600px; height: 1500px;
+      border: 0;
+      opacity: 0.0001;
+      pointer-events: none;
+      z-index: -1;
+      transform: translateZ(0);
+    }
+
+    #boot-veil {
+      position: fixed; inset: 0; z-index: 500;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+      background: radial-gradient(circle at 50% 55%, #04121b 0%, #000308 70%);
+      transition: opacity 0.9s ease, visibility 0.9s;
+    }
+    #boot-veil.gone { opacity: 0; visibility: hidden; pointer-events: none; }
+    #boot-veil h1 { margin: 0; font-weight: 200; font-size: clamp(38px, 7vw, 76px); letter-spacing: -0.02em; text-transform: lowercase; }
+    #boot-veil h1 span { color: #3b6fd4; }
+    #boot-veil p { margin: 0; font-family: 'Space Mono', monospace; font-size: 12px; letter-spacing: 0.28em; text-transform: uppercase; color: rgba(255,255,255,0.45); }
+    .boot-pulse { width: 200px; height: 2px; background: rgba(255,255,255,0.08); overflow: hidden; border-radius: 2px; }
+    .boot-pulse::after { content: ''; display: block; width: 40%; height: 100%; background: #3b6fd4; animation: sweep 1.4s cubic-bezier(.4,0,.2,1) infinite; }
+    @keyframes sweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }
+
+    #hint {
+      position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 400;
+      display: flex; gap: 20px; padding: 12px 22px; border-radius: 999px;
+      background: rgba(4,8,12,0.72); border: 1px solid rgba(255,255,255,0.10);
+      font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .12em;
+      text-transform: uppercase; color: rgba(255,255,255,.5); white-space: nowrap;
+      transition: opacity .4s ease;
+    }
+    #hint.hidden { opacity: 0; pointer-events: none; }
+    #hint kbd { color: #8fb3ff; border: 1px solid rgba(59,111,212,.4); border-radius: 3px; padding: 1px 5px; margin-right: 5px; }
+
+    #links { position: fixed; top: 20px; right: 20px; z-index: 400; display: flex; gap: 10px; }
+    #links a {
+      font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+      color: rgba(255,255,255,.4); text-decoration: none;
+      border: 1px solid rgba(255,255,255,.12); border-radius: 4px; padding: 9px 14px;
+    }
+    #links a:hover { color: #8fb3ff; border-color: rgba(59,111,212,.4); }
+
+    @media (max-width: 720px) { #hint { display: none; } }
+  </style>
+</head>
+<body>
+
+  <div id="xr-root"></div>
+
+  <!-- The real website. src is set in JS so a prelude can be installed first. -->
+  <iframe id="site-host" title="/trace"></iframe>
+
+  <div id="boot-veil">
+    <h1>/trace<span>.xr</span></h1>
+    <div class="boot-pulse"></div>
+    <p id="boot-status">Loading the live site</p>
+  </div>
+
+  <div id="hint">
+    <span><kbd>drag</kbd>look</span>
+    <span><kbd>wasd</kbd>move</span>
+    <span><kbd>click</kbd>use the site</span>
+    <span><kbd>r</kbd>recentre</span>
+  </div>
+
+  <div id="links">
+    <a href="mosaic.html">2D version</a>
+    <a href="xr.html">Native XR</a>
+  </div>
+
+  <script>
+    /*
+      Boot diagnostics.
+
+      A failure here used to leave the veil sitting there forever, and because
+      the veil is a near-black radial gradient the whole thing just reads as a
+      blank black page with no clue what went wrong. Three different kinds of
+      failure can cause that, and only one of them fires window.onerror:
+
+        · a runtime throw            -> 'error'
+        · a rejected promise in the  -> 'unhandledrejection'  (boot chain)
+        · the module never loading   -> 'error' on the <script> element only,
+          (404, parse error, an        which does NOT bubble to window
+           unsupported import map)
+
+      All three are caught below, plus a watchdog for the case where nothing
+      throws at all and boot simply stalls.
+    */
+    (function () {
+      var reported = false;
+      function fail(what, detail) {
+        if (reported) return;
+        reported = true;
+        var veil = document.getElementById('boot-veil');
+        if (!veil || veil.classList.contains('gone')) return;
+        var p = veil.querySelector('p');
+        p.innerHTML = 'Failed to start — ' + what +
+          '<br><span style="opacity:.7;text-transform:none;letter-spacing:.06em">' +
+          (detail || 'open the console for the full error') + '</span>';
+        p.style.color = '#ff6b6b';
+        p.style.maxWidth = '80vw';
+        p.style.textAlign = 'center';
+        var pulse = veil.querySelector('.boot-pulse');
+        if (pulse) pulse.style.display = 'none';
+      }
+
+      window.addEventListener('error', function (e) {
+        fail('runtime error', e.message);
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        var r = e.reason;
+        fail('unhandled rejection', r && (r.message || String(r)));
+      });
+      window.__bootFail = fail;
+
+      // If WebGL is missing entirely, say so plainly rather than failing deep
+      // inside three with a message nobody can act on.
+      try {
+        var probe = document.createElement('canvas');
+        if (!probe.getContext('webgl2') && !probe.getContext('webgl')) {
+          fail('this browser has no WebGL',
+               'check chrome://gpu, or enable hardware acceleration');
+        }
+      } catch (err) { /* the real boot will report it */ }
+
+      // Nothing threw, but we never finished either.
+      setTimeout(function () {
+        var veil = document.getElementById('boot-veil');
+        if (veil && !veil.classList.contains('gone')) {
+          var stage = (document.getElementById('boot-status') || {}).textContent;
+          fail('boot stalled', 'last stage: ' + (stage || 'unknown'));
+        }
+      }, 25000);
+    }());
+  </script>
+
+  <script type="module" src="xr/space.js"
+          onerror="window.__bootFail &amp;&amp; window.__bootFail('could not load xr/space.js', 'the module failed to load or parse — check the Network tab')"></script>
+</body>
+</html>

@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Daily Portrait Synthesis</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <style>
+    :root {
+      --bg: #08090C;
+      --text: #ffffff;
+      --border: rgba(255,255,255,0.1);
+    }
+    body {
+      margin: 0; padding: 0; background-color: var(--bg); color: var(--text);
+      font-family: 'Space Mono', monospace; display: flex; flex-direction: column;
+      height: 100vh; overflow: hidden;
+    }
+    header {
+      padding: 20px 40px; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+      background: rgba(8,9,12,0.9); z-index: 10;
+    }
+    .brand { font-size: 14px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; }
+    .controls { display: flex; gap: 20px; }
+    select, button {
+      background: transparent; border: 1px solid var(--border); color: var(--text);
+      font-family: 'Space Mono', monospace; font-size: 12px; padding: 8px 16px;
+      cursor: pointer; border-radius: 4px; text-transform: uppercase;
+      transition: all 0.2s;
+    }
+    button:hover, select:hover { border-color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.05); }
+    button.active { background: #fff; color: #000; font-weight: bold; }
+    
+    .workspace {
+      flex: 1; display: flex; justify-content: center; align-items: center;
+      position: relative;
+    }
+    
+    canvas {
+      width: 700px; height: 700px; border-radius: 8px;
+      box-shadow: 0 20px 80px rgba(0,0,0,0.8);
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+    }
+    #canvas-2d { z-index: 1; opacity: 0; transition: opacity 0.5s; }
+    #canvas-webgl { z-index: 2; opacity: 0; transition: opacity 0.5s; }
+    
+    .info {
+      position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+      font-family: 'Outfit', sans-serif; font-size: 18px; font-weight: 300;
+      opacity: 0.7; letter-spacing: 0.05em; text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">Daily Portrait Generator</div>
+    <div class="controls">
+      <select id="day-type">
+        <option value="light">Light Day (Quiet, Low Gas)</option>
+        <option value="heavy">Heavy Day (Chaotic, High Volatility)</option>
+      </select>
+      <button id="btn-way-a" class="active">Way A: Watercolor Blend</button>
+      <button id="btn-way-c">Way C: WebGL Fluid Sim</button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <!-- 2D Canvas for Way A (Rothko Blend) -->
+    <canvas id="canvas-2d" width="850" height="850"></canvas>
+    <!-- WebGL Canvas for Way C (Fluid Sim) -->
+    <canvas id="canvas-webgl" width="850" height="850"></canvas>
+    
+    <div class="info" id="info-text">Rendering 7,200 dominant blocks as a Watercolor Blend...</div>
+  </div>
+
+  <script>
+    const canvas2D = document.getElementById('canvas-2d');
+    const ctx2D = canvas2D.getContext('2d');
+    
+    const canvasGL = document.getElementById('canvas-webgl');
+    const gl = canvasGL.getContext('webgl');
+    
+    const btnA = document.getElementById('btn-way-a');
+    const btnC = document.getElementById('btn-way-c');
+    const dayTypeSelect = document.getElementById('day-type');
+    const infoText = document.getElementById('info-text');
+
+    let currentMode = 'A';
+    let currentDayType = 'light';
+    let blockColors = [];
+    let animationFrameId = null;
+
+    // --- DATA GENERATION (Step 1) ---
+    // Generate 7200 dominant colors (an 85x85 matrix)
+    function generateDailyData(type) {
+      const colors = [];
+      const totalBlocks = 85 * 85; // 7225 blocks
+      
+      for(let i = 0; i < totalBlocks; i++) {
+        let r, g, b;
+        if (type === 'light') {
+          // Light day: Cool blues, deep purples, occasional soft green
+          const rando = Math.random();
+          if (rando < 0.6) { r = 10; g = 20; b = 80 + Math.random()*100; } // Deep Blue
+          else if (rando < 0.9) { r = 40 + Math.random()*40; g = 10; b = 100 + Math.random()*50; } // Purple
+          else { r = 10; g = 150 + Math.random()*50; b = 100; } // Teal
+        } else {
+          // Heavy day: Intense reds, blazing oranges, occasional blinding white (whale)
+          const rando = Math.random();
+          if (rando < 0.5) { r = 180 + Math.random()*75; g = 20; b = 10; } // Blood Red
+          else if (rando < 0.85) { r = 255; g = 100 + Math.random()*100; b = 0; } // Fire Orange
+          else if (rando < 0.98) { r = 50; g = 10; b = 40; } // Dark void contrast
+          else { r = 255; g = 255; b = 255; } // Whale White
+        }
+        colors.push([r, g, b]);
+      }
+      return colors;
+    }
+
+    // Convert RGB array to an ImageData object for WebGL texture
+    function createTextureData(colors) {
+      const data = new Uint8Array(85 * 85 * 4);
+      for(let i=0; i<colors.length; i++) {
+        data[i*4 + 0] = colors[i][0];
+        data[i*4 + 1] = colors[i][1];
+        data[i*4 + 2] = colors[i][2];
+        data[i*4 + 3] = 255;
+      }
+      return data;
+    }
+
+    // --- WAY A: 2D WATERCOLOR (Mark Rothko) ---
+    function renderWayA() {
+      cancelAnimationFrame(animationFrameId);
+      canvas2D.style.opacity = 1;
+      canvasGL.style.opacity = 0;
+      infoText.innerText = "Way A: Melding 7,200 rigid blocks into a soft watercolor painting.";
+
+      // 1. Create a raw 85x85 canvas
+      const hiddenCnv = document.createElement('canvas');
+      hiddenCnv.width = 85;
+      hiddenCnv.height = 85;
+      const hCtx = hiddenCnv.getContext('2d');
+      
+      const imgData = hCtx.createImageData(85, 85);
+      for(let i=0; i < blockColors.length; i++) {
+        imgData.data[i*4] = blockColors[i][0];
+        imgData.data[i*4+1] = blockColors[i][1];
+        imgData.data[i*4+2] = blockColors[i][2];
+        imgData.data[i*4+3] = 255;
+      }
+      hCtx.putImageData(imgData, 0, 0);
+
+      // 2. Draw heavily scaled and blurred onto main canvas
+      ctx2D.clearRect(0, 0, 850, 850);
+      
+      // Black background
+      ctx2D.fillStyle = '#08090C';
+      ctx2D.fillRect(0, 0, 850, 850);
+
+      // Algorithmic blur/composite
+      if (currentDayType === 'heavy') {
+        ctx2D.filter = 'blur(45px) saturate(2.0) contrast(1.5)';
+        ctx2D.globalCompositeOperation = 'screen';
+      } else {
+        ctx2D.filter = 'blur(60px) saturate(1.2) contrast(1.1)';
+        ctx2D.globalCompositeOperation = 'lighten';
+      }
+
+      ctx2D.drawImage(hiddenCnv, 0, 0, 850, 850);
+      
+      // Draw subtle vignette to frame it
+      ctx2D.filter = 'none';
+      ctx2D.globalCompositeOperation = 'source-over';
+      const grad = ctx2D.createRadialGradient(425, 425, 200, 425, 425, 500);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(1, 'rgba(8,9,12,1)');
+      ctx2D.fillStyle = grad;
+      ctx2D.fillRect(0, 0, 850, 850);
+    }
+
+    // --- WAY C: WEBGL FLUID SHADER ---
+    // Minimal WebGL setup
+    const vsSource = `
+      attribute vec4 a_position;
+      attribute vec2 a_texcoord;
+      varying vec2 v_texcoord;
+      void main() {
+        gl_Position = a_position;
+        v_texcoord = a_texcoord;
+      }
+    `;
+
+    const fsSource = `
+      precision highp float;
+      varying vec2 v_texcoord;
+      uniform sampler2D u_texture;
+      uniform float u_time;
+      uniform float u_volatility;
+
+      // Simple sine-based distortion for fluid
+      vec2 distort(vec2 p) {
+        float t = u_time * 0.5;
+        float x = sin(p.y * 10.0 + t) * 0.05 * u_volatility;
+        float y = cos(p.x * 12.0 - t) * 0.05 * u_volatility;
+        
+        // Secondary swirl
+        x += sin(p.y * 3.0 - t * 0.5) * 0.1 * u_volatility;
+        y += cos(p.x * 4.0 + t * 0.5) * 0.1 * u_volatility;
+        
+        return p + vec2(x, y);
+      }
+
+      void main() {
+        // Distort UVs
+        vec2 uv = distort(v_texcoord);
+        
+        // Sample texture with distorted UVs
+        vec4 color = texture2D(u_texture, uv);
+        
+        // Add artificial bloom/contrast
+        color.rgb = pow(color.rgb, vec3(0.8)); // brighten
+        
+        // Soft vignette
+        float dist = distance(v_texcoord, vec2(0.5));
+        color.rgb *= smoothstep(0.7, 0.2, dist);
+
+        gl_FragColor = color;
+      }
+    `;
+
+    function initWebGL() {
+      const vertShader = gl.createShader(gl.VERTEX_SHADER);
+      gl.shaderSource(vertShader, vsSource);
+      gl.compileShader(vertShader);
+
+      const fragShader = gl.createShader(gl.FRAGMENT_SHADER);
+      gl.shaderSource(fragShader, fsSource);
+      gl.compileShader(fragShader);
+
+      const program = gl.createProgram();
+      gl.attachShader(program, vertShader);
+      gl.attachShader(program, fragShader);
+      gl.linkProgram(program);
+      gl.useProgram(program);
+
+      // Set up quad
+      const positionBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1.0, -1.0,  1.0, -1.0,  -1.0,  1.0,
+        -1.0,  1.0,  1.0, -1.0,   1.0,  1.0
+      ]), gl.STATIC_DRAW);
+      
+      const posLocation = gl.getAttribLocation(program, "a_position");
+      gl.enableVertexAttribArray(posLocation);
+      gl.vertexAttribPointer(posLocation, 2, gl.FLOAT, false, 0, 0);
+
+      const texcoordBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        0.0, 1.0,  1.0, 1.0,  0.0, 0.0,
+        0.0, 0.0,  1.0, 1.0,  1.0, 0.0
+      ]), gl.STATIC_DRAW);
+      
+      const texLocation = gl.getAttribLocation(program, "a_texcoord");
+      gl.enableVertexAttribArray(texLocation);
+      gl.vertexAttribPointer(texLocation, 2, gl.FLOAT, false, 0, 0);
+
+      window.glProgram = program;
+      window.glTexture = gl.createTexture();
+    }
+    
+    initWebGL();
+
+    function renderWayC() {
+      cancelAnimationFrame(animationFrameId);
+      canvas2D.style.opacity = 0;
+      canvasGL.style.opacity = 1;
+      infoText.innerText = "Way C: Pumping 7,200 blocks into a WebGL Shader for real-time Fluid Dynamics.";
+
+      const texData = createTextureData(blockColors);
+      
+      gl.bindTexture(gl.TEXTURE_2D, window.glTexture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 85, 85, 0, gl.RGBA, gl.UNSIGNED_BYTE, texData);
+      
+      // Linear filtering for smooth blending
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+      const timeLoc = gl.getUniformLocation(window.glProgram, "u_time");
+      const volLoc = gl.getUniformLocation(window.glProgram, "u_volatility");
+      
+      const volatility = currentDayType === 'heavy' ? 2.5 : 0.5;
+      const startTime = Date.now();
+
+      function drawFrame() {
+        const time = (Date.now() - startTime) / 1000.0;
+        gl.uniform1f(timeLoc, time);
+        gl.uniform1f(volLoc, volatility);
+        
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        animationFrameId = requestAnimationFrame(drawFrame);
+      }
+      drawFrame();
+    }
+
+    // --- EVENT LISTENERS ---
+    function updateState() {
+      blockColors = generateDailyData(currentDayType);
+      if (currentMode === 'A') renderWayA();
+      else renderWayC();
+    }
+
+    btnA.addEventListener('click', () => {
+      currentMode = 'A'; btnA.classList.add('active'); btnC.classList.remove('active');
+      updateState();
+    });
+    btnC.addEventListener('click', () => {
+      currentMode = 'C'; btnC.classList.add('active'); btnA.classList.remove('active');
+      updateState();
+    });
+    dayTypeSelect.addEventListener('change', (e) => {
+      currentDayType = e.target.value;
+      updateState();
+    });
+
+    // Init
+    updateState();
+
+  </script>
+</body>
+</html>

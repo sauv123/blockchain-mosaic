@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>/trace — Remote</title>
+  <meta name="description" content="Drive the /trace XR headset from any browser.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #14140f;
+      --panel: rgba(30, 30, 25, 0.9);
+      --border: rgba(255, 255, 255, 0.10);
+      --text: #e2e2da;
+      --dim: #8c8c85;
+      --accent: #3b6fd4;
+      --ok: #51cf66;
+      --bad: #ff6b6b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 20px 16px 64px;
+      background: var(--bg); color: var(--text);
+      font-family: 'Outfit', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      max-width: 720px; margin-inline: auto;
+    }
+    header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+    h1 { font-size: 1.5rem; font-weight: 300; margin: 0; letter-spacing: -0.01em; }
+    h1 b { font-weight: 700; color: var(--accent); }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); flex: none; }
+    .dot.on { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+    .sub {
+      font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--dim); margin-bottom: 26px;
+    }
+
+    section {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px; margin-bottom: 14px;
+    }
+    h2 {
+      font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700;
+      letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);
+      margin: 0 0 14px;
+    }
+    label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--dim); margin: 14px 0 7px; }
+    label:first-of-type { margin-top: 0; }
+
+    .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+    button.opt, button.act {
+      font-family: inherit; font-size: 0.85rem; font-weight: 500;
+      color: var(--text); background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 13px 12px; cursor: pointer; text-align: left;
+      transition: background .15s, border-color .15s, color .15s;
+    }
+    button.opt:hover, button.act:hover { background: rgba(59,111,212,0.14); border-color: var(--accent); }
+    button.opt[aria-pressed="true"] {
+      color: var(--accent); border-color: var(--accent); background: rgba(59,111,212,0.16); font-weight: 600;
+    }
+    button.act { text-align: center; }
+    button.act.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
+    .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+
+    input[type="text"] {
+      width: 100%; font-family: 'Space Mono', monospace; font-size: 0.9rem;
+      color: var(--text); background: rgba(0,0,0,0.35);
+      border: 1px solid var(--border); border-radius: 8px; padding: 13px 14px;
+    }
+    input[type="text"]:focus { outline: none; border-color: var(--accent); }
+
+    input[type="range"] { width: 100%; accent-color: var(--accent); height: 34px; }
+
+    .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+    .cal .dow {
+      font-family: 'Space Mono', monospace; font-size: 10px; color: var(--dim);
+      text-align: center; padding-bottom: 4px;
+    }
+    .cal button {
+      aspect-ratio: 1; font-family: 'Space Mono', monospace; font-size: 0.8rem;
+      color: var(--text); background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border); border-radius: 7px; cursor: pointer;
+    }
+    .cal button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .cal button:disabled { opacity: 0.25; cursor: default; }
+    .cal button.sel { background: rgba(59,111,212,0.2); border-color: var(--accent); color: var(--accent); }
+    .cal .pad { visibility: hidden; }
+
+    .note { font-size: 0.78rem; color: var(--dim); line-height: 1.5; margin-top: 12px; }
+    #log {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      background: rgba(6,8,10,0.96); border-top: 1px solid var(--border);
+      font-family: 'Space Mono', monospace; font-size: 11px; color: var(--dim);
+      padding: 11px 16px; text-align: center;
+    }
+    #log b { color: var(--accent); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <span class="dot" id="dot"></span>
+    <h1>/trace <b>remote</b></h1>
+  </header>
+  <div class="sub" id="sub">connecting…</div>
+
+  <section>
+    <h2>Tapestry</h2>
+    <label>Data Stream</label>
+    <div class="opts" data-control="chain-select">
+      <button class="opt" data-value="ethereum">Global Main Network</button>
+      <button class="opt" data-value="base">High-Speed (Base)</button>
+      <button class="opt" data-value="arbitrum">High-Speed (Arbitrum)</button>
+      <button class="opt" data-value="solana">Ultra-Fast (Solana)</button>
+    </div>
+
+    <label>Color Palette</label>
+    <div class="opts" data-control="palette-select">
+      <button class="opt" data-value="electricBlue">Classic Electric Blue</button>
+      <button class="opt" data-value="meadow">Forest Meadow</button>
+      <button class="opt" data-value="sunset">Cyberpunk Sunset</button>
+      <button class="opt" data-value="spectrum">Multicolor Spectrum</button>
+    </div>
+
+    <label>Theme</label>
+    <div class="opts" data-control="theme-select">
+      <button class="opt" data-value="charcoal">Charcoal (Dark)</button>
+      <button class="opt" data-value="warmGray">Warm Gray (Light)</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Sound</h2>
+    <label>Instrument Profile</label>
+    <div class="opts" data-control="sound-profile-select">
+      <button class="opt" data-value="chimes">Warm Chimes</button>
+      <button class="opt" data-value="guitar">Acoustic Guitar</button>
+      <button class="opt" data-value="drums">Electronic Drums (808)</button>
+      <button class="opt" data-value="pad">Synth Pad</button>
+    </div>
+
+    <label>Background Ambient Loop</label>
+    <div class="opts" data-control="ambient-profile-select">
+      <button class="opt" data-value="hum">Low-Frequency Hum (55Hz)</button>
+      <button class="opt" data-value="crackle">Vinyl Crackle &amp; Pop</button>
+      <button class="opt" data-value="none">None</button>
+    </div>
+
+    <label>&nbsp;</label>
+    <div class="row">
+      <button class="act" data-click="audio-toggle-btn">Toggle Sound</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Track a Wallet</h2>
+    <input type="text" id="wallet" placeholder="0x71c9595e6f36ff8b813b2c6b4716766465cba279" autocomplete="off" spellcheck="false">
+    <div class="row" style="margin-top:8px">
+      <button class="act primary" id="track-go">Track</button>
+      <button class="act" id="track-clear">Clear</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Daily Portraits</h2>
+    <div class="cal" id="cal"></div>
+    <div class="row" style="margin-top:12px">
+      <button class="act" data-click="return-live-btn">Return to Live Grid</button>
+      <button class="act" data-click="generate-portrait-btn">View Portrait</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Playback</h2>
+    <div class="row">
+      <button class="act" data-click="playback-play-btn">Play / Pause</button>
+    </div>
+    <label>Scrub</label>
+    <input type="range" id="scrub" min="0" max="100" value="0">
+    <div class="note" id="scrub-note">Scrubbing only does something while an archive day is loaded.</div>
+  </section>
+
+  <section>
+    <h2>View</h2>
+    <div class="row">
+      <button class="act" data-click="art-mode-btn">Focus Mode</button>
+      <button class="act" data-click="guide-open-btn">Guide</button>
+      <button class="act" data-click="archive-toggle-btn">Settings Drawer</button>
+      <button class="act" data-click="export-svg-btn">Export SVG</button>
+    </div>
+    <div class="note">
+      These drive the headset's copy of the site. The drawer and guide will open
+      as floating panels there.
+    </div>
+  </section>
+
+  <div id="log">waiting for the headset…</div>
+
+  <script>
+    // -----------------------------------------------------------------------
+    // The remote speaks to the relay, which fans control messages out to every
+    // other connected client — i.e. the headset. It never renders the mosaic
+    // itself, so it stays usable on a phone.
+    // -----------------------------------------------------------------------
+    const dot = document.getElementById('dot');
+    const sub = document.getElementById('sub');
+    const log = document.getElementById('log');
+
+    let ws = null;
+    let retry = 1000;
+
+    function connect() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${proto}//${location.host}`);
+
+      ws.addEventListener('open', () => {
+        retry = 1000;
+        dot.classList.add('on');
+        sub.textContent = 'connected · changes apply live';
+        send('hello', null);
+      });
+
+      ws.addEventListener('close', () => {
+        dot.classList.remove('on');
+        sub.textContent = 'disconnected — retrying';
+        retry = Math.min(retry * 1.5, 15000);
+        setTimeout(connect, retry);
+      });
+
+      ws.addEventListener('message', (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === 'control' && msg.action === 'state') applyState(msg.value);
+        } catch (e) { /* block traffic, not ours */ }
+      });
+    }
+
+    function send(action, value, target) {
+      if (!ws || ws.readyState !== 1) {
+        log.textContent = 'not connected — is the headset page open?';
+        return;
+      }
+      ws.send(JSON.stringify({ type: 'control', action, value, target }));
+      log.innerHTML = `sent <b>${action}</b>${value != null ? ' → ' + value : ''}`;
+    }
+
+    /** Mirrors the headset's current settings onto the buttons. */
+    function applyState(state) {
+      if (!state) return;
+      document.querySelectorAll('[data-control]').forEach((group) => {
+        const key = group.dataset.control;
+        group.querySelectorAll('.opt').forEach((b) => {
+          b.setAttribute('aria-pressed', String(state[key] === b.dataset.value));
+        });
+      });
+      if (state.tracked != null && document.activeElement !== document.getElementById('wallet')) {
+        document.getElementById('wallet').value = state.tracked;
+      }
+      if (state.playbackMax) {
+        const s = document.getElementById('scrub');
+        s.max = state.playbackMax;
+        if (document.activeElement !== s) s.value = state.playback || 0;
+        document.getElementById('scrub-note').textContent =
+          `${state.playback || 0} / ${state.playbackMax} blocks`;
+      }
+    }
+
+    // --- wiring ------------------------------------------------------------
+    document.querySelectorAll('[data-control] .opt').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const key = btn.closest('[data-control]').dataset.control;
+        send('select', btn.dataset.value, key);
+        btn.closest('[data-control]').querySelectorAll('.opt')
+          .forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+      });
+    });
+
+    document.querySelectorAll('[data-click]').forEach((btn) => {
+      btn.addEventListener('click', () => send('click', null, btn.dataset.click));
+    });
+
+    document.getElementById('track-go').addEventListener('click', () => {
+      send('track', document.getElementById('wallet').value.trim());
+    });
+    document.getElementById('track-clear').addEventListener('click', () => {
+      document.getElementById('wallet').value = '';
+      send('track', '');
+    });
+
+    const scrub = document.getElementById('scrub');
+    scrub.addEventListener('input', () => send('scrub', scrub.value));
+
+    // --- calendar ----------------------------------------------------------
+    (function buildCalendar() {
+      const cal = document.getElementById('cal');
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      ['S', 'M', 'T', 'W', 'T', 'F', 'S'].forEach((d) => {
+        const el = document.createElement('div');
+        el.className = 'dow';
+        el.textContent = d;
+        cal.appendChild(el);
+      });
+      const first = new Date(year, month, 1).getDay();
+      const days = new Date(year, month + 1, 0).getDate();
+      for (let i = 0; i < first; i++) {
+        const pad = document.createElement('button');
+        pad.className = 'pad';
+        pad.disabled = true;
+        cal.appendChild(pad);
+      }
+      for (let d = 1; d <= days; d++) {
+        const b = document.createElement('button');
+        b.textContent = d;
+        const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        if (d > now.getDate()) b.disabled = true;
+        b.addEventListener('click', () => {
+          cal.querySelectorAll('button').forEach((x) => x.classList.remove('sel'));
+          b.classList.add('sel');
+          send('date', iso);
+        });
+        cal.appendChild(b);
+      }
+    }());
+
+    connect();
+  </script>
+</body>
+</html>

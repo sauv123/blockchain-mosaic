@@ -1,0 +1,165 @@
+commit 20216ae569da902efa2c8c500dadbaa9c9ac979e
+Author: sauveersinha <sauveersinha@gmail.com>
+Date:   Thu Sep 17 12:33:51 2026 +0200
+
+    Fix: Bust browser cache, add interactive ledger, enhance hover tooltips, and add dual-glow (block + element) effect
+
+diff --git a/display/app.js b/display/app.js
+index 9da8178..1836909 100644
+--- a/display/app.js
++++ b/display/app.js
+@@ -916,7 +916,7 @@ function generateMockHistoryForDate(dateString) {
+ 
+ // Simulated chain block generator
+ function generateSimulatedBlock() {
+-  if (currentMode !== 'LIVE' || currentChain === 'ethereum') return;
++  if (currentMode !== 'LIVE') return;
+   
+   let blockNum = blocks.length > 0 ? blocks[blocks.length - 1].block_number + 1 : 42000000;
+   let timestamp = Math.floor(Date.now() / 1000);
+@@ -1254,9 +1254,24 @@ function draw(timestamp) {
+     if (idx !== -1) {
+       const col = idx % cols;
+       const row = Math.floor(idx / cols);
+-      ctx.strokeStyle = theme.text;
+-      ctx.lineWidth = 1.5;
+-      ctx.strokeRect(col * tileSize, row * tileSize, tileSize - gutter, tileSize - gutter);
++      const x = col * tileSize;
++      const y = row * tileSize;
++      const size = tileSize - gutter;
++      
++      ctx.save();
++      // Block level glow
++      ctx.globalCompositeOperation = 'screen';
++      ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
++      ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
++      ctx.shadowBlur = 20;
++      ctx.fillRect(x, y, size, size);
++      
++      // Crisp outer border
++      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
++      ctx.lineWidth = 1;
++      ctx.shadowBlur = 0;
++      ctx.strokeRect(x, y, size, size);
++      ctx.restore();
+     }
+   }
+ 
+@@ -1354,7 +1369,25 @@ function connectRelay() {
+ 
+   function attemptNextConnection() {
+     if (currentIndex >= candidateUrls.length) {
+-      setTimeout(connectRelay, 5000);
++      if (currentMode === 'LIVE') {
++        if (!window.simIntervalId) {
++          window.simIntervalId = setInterval(generateSimulatedBlock, 12000);
++          const capacity = cols * rows;
++          for (let i = 0; i < capacity; i++) {
++            blocks.push({
++              block_number: 42000000 + i,
++              timestamp: Math.floor(Date.now() / 1000) - ((capacity - i) * 12),
++              hash: '0x' + Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2),
++              tx_count: 20 + Math.floor(Math.random() * 150),
++              base_fee_gwei: 10 + Math.random() * 80,
++              contract_ratio: Math.random(),
++              whale_flag: Math.random() < 0.05 ? 1 : 0
++            });
++          }
++          generateSimulatedBlock(); 
++        }
++      }
++      setTimeout(connectRelay, 15000);
+       return;
+     }
+ 
+@@ -1674,21 +1707,12 @@ function updateTooltip(block, e) {
+   const feeUnit = currentChain === 'solana' ? 'SOL' : 'Gwei';
+ 
+   hoverTooltip.innerHTML = `
+-    <div class="tooltip-header">
+-      <span class="block-num">Block #${block.block_number}</span>
+-      <span class="mood-badge" style="font-size: 9px; padding: 2px 6px; border-radius: 4px; font-weight:600; background:rgba(0,0,0,0.1);">${mood}</span>
+-    </div>
+-    <div class="tooltip-row">
+-      <span class="label">Tx Count</span>
+-      <span class="value">${block.tx_count}</span>
+-    </div>
+-    <div class="tooltip-row">
+-      <span class="label">Amount (USD)</span>
+-      <span class="value">$${totalBlockUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+-    </div>
+-    <div class="tooltip-row">
+-      <span class="label">Base Fee</span>
+-      <span class="value">${block.base_fee_gwei.toFixed(currentChain === 'solana' ? 5 : 1)} ${feeUnit}</span>
++    <div style="font-family: 'Outfit', sans-serif; font-size: 13px; line-height: 1.5; color: rgba(255,255,255,0.9); padding: 4px;">
++      This block was mostly filled with <strong>${block.contract_ratio > 0.6 ? 'Trading Coins' : 'Direct Payments'}</strong>. 
++      <br><br>
++      Network traffic was <strong>${block.base_fee_gwei > 50 ? 'Congested and Expensive' : 'Quiet and Cheap'}</strong>, costing people around <strong>${block.base_fee_gwei.toFixed(0)} Gwei</strong>.
++      <br><br>
++      <span style="color: #00ff88;">${block.tx_count} Total Actions</span> • <span style="color: rgba(255,255,255,0.5);">$${totalBlockUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })} Moved</span>
+     </div>
+   `;
+ 
+@@ -2469,3 +2493,62 @@ applyThemeStyles();
+ updateRatioBarColors();
+ updateLegend();
+ triggerGsapEntrances();
++
++
++let clickedLegendFilter = null;
++let filterCountTooltip = document.getElementById('filter-count-tooltip');
++if (!filterCountTooltip) {
++  filterCountTooltip = document.createElement('div');
++  filterCountTooltip.id = 'filter-count-tooltip';
++  filterCountTooltip.style.position = 'absolute';
++  filterCountTooltip.style.bottom = '50px';
++  filterCountTooltip.style.left = '32px';
++  filterCountTooltip.style.fontFamily = "'Space Mono', monospace";
++  filterCountTooltip.style.fontSize = '12px';
++  filterCountTooltip.style.color = '#fff';
++  filterCountTooltip.style.background = 'rgba(8,9,12,0.95)';
++  filterCountTooltip.style.padding = '12px 18px';
++  filterCountTooltip.style.borderRadius = '8px';
++  filterCountTooltip.style.border = '1px solid rgba(255,255,255,0.15)';
++  filterCountTooltip.style.pointerEvents = 'none';
++  filterCountTooltip.style.opacity = '0';
++  document.body.appendChild(filterCountTooltip);
++}
++
++const legendEl = document.getElementById('legend-container');
++if (legendEl) {
++  legendEl.addEventListener('click', (e) => {
++    const item = e.target.closest('.legend-item');
++    if (!item) return;
++    const text = item.textContent.trim();
++    
++    let typeKey = null;
++    if (text.includes('Plain Transfer')) typeKey = 'Plain Transfer';
++    else if (text.includes('Token Swap')) typeKey = 'Token Swap';
++    else if (text.includes('NFT Mint')) typeKey = 'NFT Mint';
++    if (!typeKey) return;
++
++    if (clickedLegendFilter === typeKey) {
++      clickedLegendFilter = null;
++      document.querySelectorAll('.legend-item').forEach(el => el.style.opacity = '1');
++      if (typeof gsap !== 'undefined') gsap.to(filterCountTooltip, { opacity: 0, y: 10, duration: 0.3 });
++    } else {
++      clickedLegendFilter = typeKey;
++      document.querySelectorAll('.legend-item').forEach(el => el.style.opacity = '0.3');
++      item.style.opacity = '1';
++      
++      let count = 0;
++      blocks.slice(-maxTiles).forEach(b => {
++        getBlockTransactions(b).forEach(t => {
++          if (t.type === typeKey) count++;
++        });
++      });
++      
++      filterCountTooltip.innerHTML = `<div style="font-size: 16px; font-weight: bold; color: ${PALETTES.classic[typeKey]};">${count.toLocaleString()} ${typeKey}s</div>`;
++      if (typeof gsap !== 'undefined') {
++        gsap.killTweensOf(filterCountTooltip);
++        gsap.fromTo(filterCountTooltip, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4 });
++      }
++    }
++  });
++}
