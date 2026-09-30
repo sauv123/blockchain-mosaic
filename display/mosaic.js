@@ -1018,7 +1018,6 @@ function generateSimulatedBlock() {
         
         updateStats();
         
-        // Trigger simulated block animation ripple wave
         if (blocks.length > 0 && typeof gsap !== 'undefined') {
             const lastIdx = blocks.length - 1;
             rippleOriginCol = lastIdx % cols;
@@ -1041,7 +1040,7 @@ function generateSimulatedBlock() {
         if (!data || !data.result) throw new Error("Invalid RPC payload");
         const b = data.result;
         const bNum = parseInt(b.number, 16);
-        if (window.lastSeenBlockHex === b.number) return; // Prevent duplicates
+        if (window.lastSeenBlockHex === b.number) return; 
         window.lastSeenBlockHex = b.number;
         
         const txC = b.transactions.length;
@@ -1066,3 +1065,1814 @@ function generateSimulatedBlock() {
 }
 
 
+// Chain Select dropdown handler
+if (chainSelect) {
+  chainSelect.addEventListener('change', (e) => {
+    currentChain = e.target.value;
+    lastInteractionTime = Date.now();
+    
+    if (chainIntervalId) {
+      clearInterval(chainIntervalId);
+      chainIntervalId = null;
+    }
+    
+    blocks = [];
+    tileSize = 64;
+    resizeCanvas();
+    
+    if (currentChain === 'ethereum') {
+      switchToLive();
+    } else {
+      let cadence = 2000;
+      if (currentChain === 'arbitrum') cadence = 500;
+      else if (currentChain === 'solana') cadence = 400;
+      
+      chainIntervalId = setInterval(generateSimulatedBlock, cadence);
+      generateSimulatedBlock();
+    }
+  });
+}
+
+// SVG Exporter
+function exportSVG() {
+  const theme = THEMES[currentTheme];
+  let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${canvas.width} ${canvas.height}" width="${canvas.width}" height="${canvas.height}">\n`;
+  svgContent += `  <rect width="100%" height="100%" fill="${theme.bg}"/>\n`;
+  
+  const category = currentMode === 'HISTORICAL' ? getCategoryForDay(historicalDayNumber) : null;
+  
+  blocks.forEach((block, index) => {
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const x = col * tileSize;
+    const y = row * tileSize;
+    const size = tileSize - gutter;
+    
+    const isOnTemplate = currentMode === 'HISTORICAL' ? getDailyMaskAlignment(col, row, category) : true;
+    const tileBg = isOnTemplate ? theme.tileBg : theme.bg;
+    
+    svgContent += `  <!-- Block #${block.block_number} -->\n`;
+    svgContent += `  <rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${tileBg}" rx="3"/>\n`;
+    
+    const density = Math.max(0.1, Math.min(0.85, block.tx_count / 300));
+    const targetOnCount = Math.max(6, Math.floor(density * 64));
+    const regularity = 1.0 - block.contract_ratio;
+    const activeCells = getSubpixelLayout(block.hash, targetOnCount, regularity);
+    
+    const prevBlock = index > 0 ? blocks[index - 1] : null;
+    const blockInterval = prevBlock ? Math.max(1, block.timestamp - prevBlock.timestamp) : 12;
+    const edgeFadeFactor = Math.max(0, Math.min(0.75, (blockInterval - 8) / 16));
+    const subSize = size / 8;
+    
+    const whaleIndex1 = parseInt(block.hash.replace('0x','').substring(0, 2), 16) % targetOnCount;
+    const whaleIndex2 = parseInt(block.hash.replace('0x','').substring(2, 4), 16) % targetOnCount;
+    
+    const txs = getBlockTransactions(block);
+    
+    activeCells.forEach((cell, idx) => {
+      const dx = cell.col - 3.5;
+      const dy = cell.row - 3.5;
+      const dist = Math.sqrt(dx * dx + dy * dy) / 4.95;
+      
+      const maskModifier = isOnTemplate ? 1.0 : 0.15;
+      const finalOpacity = Math.max(0.05, 1 - dist * edgeFadeFactor) * maskModifier;
+      
+      const tx = txs[idx % txs.length] || { type: 'Plain Transfer' };
+      let baseColor = PALETTES[currentPalette][tx.type] || PALETTES[currentPalette]['default'];
+      if (currentPalette === 'monochrome') {
+        baseColor = theme.accent;
+      }
+      
+      let color = baseColor;
+      if (block.whale_flag === 1 && (idx === whaleIndex1 || idx === whaleIndex2)) {
+        color = '#ffffff';
+      }
+      
+      const finalColor = color.includes('hsl') && !color.includes('hsla') ? color.replace('hsl', 'hsla').replace(')', `, ${finalOpacity.toFixed(2)})`) : color;
+      
+      const px = x + cell.col * subSize + 0.5;
+      const py = y + cell.row * subSize + 0.5;
+      const pSize = subSize - 1;
+      
+      svgContent += `  <rect x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="${pSize.toFixed(1)}" height="${pSize.toFixed(1)}" fill="${finalColor}"/>\n`;
+    });
+  });
+  
+  svgContent += `</svg>`;
+  
+  const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  
+  const filename = currentMode === 'LIVE' ? `blockchain-live-${Date.now()}.svg` : `blockchain-portrait-${selectedHistoricalDate.replace(/ /g, '-')}.svg`;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+if (exportSvgBtn) {
+  exportSvgBtn.addEventListener('click', () => {
+    lastInteractionTime = Date.now();
+    exportSVG();
+  });
+}
+
+// Animation Sizing
+function resizeCanvas() {
+  const container = canvas.parentElement;
+  const width = container.clientWidth || window.innerWidth - 60;
+  const height = container.clientHeight || window.innerHeight - 160;
+  
+  canvas.width = width;
+  canvas.height = height;
+
+  cols = Math.max(12, Math.floor(width / tileSize));
+  rows = Math.max(8, Math.floor(height / tileSize));
+  maxTiles = cols * rows;
+
+  if (currentMode === 'HISTORICAL' && selectedHistoricalDate) {
+    playbackFullList = generateMockHistoryForDate(selectedHistoricalDate);
+    playbackSlider.max = playbackFullList.length;
+    if (!isPlayingPlayback) {
+      blocks = playbackFullList.slice(0, playbackIndex);
+    }
+  }
+
+  updateStats();
+}
+
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// Draw Loop
+function draw(timestamp) {
+
+  // ART_SYNTHESIS: canvas filter applied via CSS — no separate draw path needed
+
+  const theme = THEMES[currentTheme];
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Smooth interpolate canvas tilt for Focus Mode
+  if (currentMode !== 'ART_SYNTHESIS') {
+    currentTiltX += (targetTiltX - currentTiltX) * 0.05;
+    currentTiltY += (targetTiltY - currentTiltY) * 0.05;
+    if (Math.abs(currentTiltX) > 0.01 || Math.abs(currentTiltY) > 0.01) {
+      canvas.style.transform = `rotateX(${currentTiltX.toFixed(2)}deg) rotateY(${currentTiltY.toFixed(2)}deg) translateZ(0)`;
+    } else if (canvas.style.transform) {
+      canvas.style.transform = '';
+    }
+  }
+
+  if (blocks.length === 0 && currentMode === 'LIVE') {
+    ctx.fillStyle = theme.tileBg;
+    for (let c = 0; c < cols; c++) {
+      for (let r = 0; r < rows; r++) {
+        ctx.fillRect(c * tileSize, r * tileSize, tileSize - gutter, tileSize - gutter);
+        ctx.fillStyle = theme.text === '#222220' ? 'rgba(0, 0, 0, 0.02)' : 'rgba(255, 255, 255, 0.02)';
+        ctx.strokeStyle = theme.gridLine;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(c * tileSize, r * tileSize, tileSize - gutter, tileSize - gutter);
+      }
+    }
+
+    ctx.fillStyle = theme.text;
+    ctx.font = '500 13px Outfit';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('CONNECTING TO BLOCKCHAIN RELAY...', canvas.width / 2, canvas.height / 2);
+    
+    requestAnimationFrame(draw);
+    return;
+  }
+
+  const category = currentMode === 'HISTORICAL' ? getCategoryForDay(historicalDayNumber) : null;
+
+  for (let index = 0; index < blocks.length; index++) {
+    const block = blocks[index];
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const x = col * tileSize;
+    const y = row * tileSize;
+
+    const prevBlock = index > 0 ? blocks[index - 1] : null;
+    const blockInterval = prevBlock ? Math.max(1, block.timestamp - prevBlock.timestamp) : 12;
+
+    let progress = 1.0;
+    if (currentMode === 'LIVE' && block.block_number === incomingBlockNum) {
+      const elapsed = Date.now() - incomingBlockStartTime;
+      progress = Math.min(elapsed / PAINT_DURATION, 1.0);
+    }
+
+    const phaseShift = (col + row) * 0.15;
+    const tileShimmer = Math.sin(Date.now() / 1800 + phaseShift) * 0.03 + 0.97;
+
+    let isTracked = false;
+    let trackDirection = 'none';
+    if (trackedAddress && trackedAddress.length > 0) {
+      const txs = getBlockTransactions(block);
+      const match = txs.find(tx => tx.from.includes(trackedAddress) || tx.to.includes(trackedAddress));
+      if (match) {
+        isTracked = true;
+        trackDirection = match.from.includes(trackedAddress) ? 'sent' : 'received';
+      }
+    }
+
+    const isOnTemplate = currentMode === 'HISTORICAL' ? getDailyMaskAlignment(col, row, category) : true;
+
+    // 1. Organic Spatial Drift (Sine Wave based floating offset)
+    let floatX = 0;
+    let floatY = 0;
+    if (focusFloatProgress.value > 0) {
+      const timeFactor = Date.now() * 0.0012;
+      floatX = Math.sin(timeFactor + col * 0.5 + row * 0.3) * 8 * focusFloatProgress.value;
+      floatY = Math.cos(timeFactor + col * 0.3 + row * 0.5) * 8 * focusFloatProgress.value;
+    }
+
+    // 2. Click Radial Wave Ripple Effect calculation
+    let rippleAlphaModifier = 1.0;
+    if (rippleOriginCol !== -1 && rippleProgress.value > 0 && rippleProgress.value < 1.0) {
+      const dist = Math.sqrt(Math.pow(col - rippleOriginCol, 2) + Math.pow(row - rippleOriginRow, 2));
+      const targetRadius = rippleProgress.value * Math.max(cols, rows) * 1.5;
+      
+      // Ripple width span
+      const width = 2.5;
+      if (Math.abs(dist - targetRadius) < width) {
+        const factor = 1.0 - (Math.abs(dist - targetRadius) / width);
+        // Peak flash boost
+        rippleAlphaModifier = 1.0 + factor * 1.5;
+      }
+    }
+
+    drawTile(ctx, x + floatX, y + floatY, tileSize - gutter, block, blockInterval, progress * tileShimmer * rippleAlphaModifier, theme, isTracked, trackDirection, isOnTemplate);
+  }
+
+  if (hoveredBlock) {
+    const idx = blocks.indexOf(hoveredBlock);
+    if (idx !== -1) {
+      const col = idx % cols;
+      const row = Math.floor(idx / cols);
+      const x = col * tileSize;
+      const y = row * tileSize;
+      const size = tileSize - gutter;
+      
+      // Removed hard outer outline; relying on internal subpixel glow
+      // We can add a very subtle overall glass reflection
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      ctx.fillRect(x, y, size, size);
+      ctx.restore();
+    }
+  }
+
+  if (detailsSidebar && detailsSidebar.classList.contains('open') && Date.now() - lastInteractionTime > DISMISS_TIMEOUT) {
+    detailsSidebar.classList.remove('open');
+    canvasContainer.classList.remove('sidebar-open');
+    activePopoverBlock = null;
+    setTimeout(resizeCanvas, 420);
+  }
+
+    // Render Shockwaves
+  if (currentMode !== 'ART_SYNTHESIS') {
+    for (let i = shockwaves.length - 1; i >= 0; i--) {
+      let sw = shockwaves[i];
+      sw.radius += 3;
+      sw.opacity -= 0.015;
+      
+      if (sw.opacity <= 0) {
+        shockwaves.splice(i, 1);
+        continue;
+      }
+      
+      ctx.beginPath();
+      ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+      if (sw.isWhale) {
+        ctx.strokeStyle = `rgba(255, 215, 0, ${sw.opacity})`; // Gold whale pulse
+        ctx.lineWidth = 4;
+        ctx.setLineDash([5, 5]);
+      } else {
+        ctx.strokeStyle = `rgba(0, 255, 136, ${sw.opacity})`;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([]);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  requestAnimationFrame(draw);
+}
+
+// Generate sub-pixel grid dots deterministically
+function getSubpixelLayout(hash, targetCount, regularity) {
+  const cells = [];
+  for (let i = 0; i < 64; i++) {
+    const r = Math.floor(i / 8);
+    const c = i % 8;
+    const regularScore = (r + c) % 2 === 0 ? 0.75 : 0.25;
+    const hexVal = parseInt(hash[i % hash.length], 16);
+    const irregularScore = hexVal / 15;
+    const score = regularity * regularScore + (1 - regularity) * irregularScore;
+    cells.push({ index: i, row: r, col: c, score });
+  }
+  cells.sort((a, b) => b.score - a.score);
+  return cells.slice(0, targetCount);
+}
+
+function drawTile(ctx, x, y, size, block, blockInterval, alpha, theme, isTracked, trackDirection, isOnTemplate) {
+  const hash = block.hash.replace('0x', '');
+  
+  ctx.fillStyle = isOnTemplate ? theme.tileBg : theme.bg;
+  ctx.fillRect(x, y, size, size);
+
+  const density = Math.max(0.1, Math.min(0.85, block.tx_count / 300));
+  const targetOnCount = Math.max(6, Math.floor(density * 64));
+  const regularity = 1.0 - block.contract_ratio;
+  const activeCells = getSubpixelLayout(hash, targetOnCount, regularity);
+
+  const edgeFadeFactor = Math.max(0, Math.min(0.75, (blockInterval - 8) / 16));
+  const subSize = size / 8;
+
+  const whaleIndex1 = parseInt(hash.substring(0, 2), 16) % targetOnCount;
+  const whaleIndex2 = parseInt(hash.substring(2, 4), 16) % targetOnCount;
+
+  const txs = getBlockTransactions(block);
+
+  activeCells.forEach((cell, idx) => {
+    const dx = cell.col - 3.5;
+    const dy = cell.row - 3.5;
+    const dist = Math.sqrt(dx * dx + dy * dy) / 4.95;
+    
+    const maskModifier = isOnTemplate ? 1.0 : 0.15;
+    const finalOpacity = Math.max(0.05, 1 - dist * edgeFadeFactor) * alpha * maskModifier;
+
+    const tx = txs[idx % txs.length] || { type: 'Plain Transfer' };
+    let baseColor = PALETTES[currentPalette][tx.type] || PALETTES[currentPalette]['default'];
+    if (currentPalette === 'monochrome') {
+      baseColor = theme.accent;
+    }
+
+    let isDimmed = false;
+    let isFilteredMatch = false;
+    if (typeof clickedLegendFilter !== 'undefined' && clickedLegendFilter !== null) {
+      if (tx.type !== clickedLegendFilter) isDimmed = true;
+      else isFilteredMatch = true;
+    }
+    const isBlockHovered = (typeof hoveredBlock !== 'undefined' && block === hoveredBlock);
+    
+    if (block.whale_flag === 1 && (idx === whaleIndex1 || idx === whaleIndex2)) {
+      ctx.fillStyle = `rgba(255, 255, 255, ${finalOpacity})`;
+    } else {
+      // Micro-interaction: Flash bright white on newly minted blocks (last 2 seconds)
+      let flashOverlay = 0;
+      if (currentMode === 'LIVE' && block._liveMintedTime) {
+        const age = Date.now() - block._liveMintedTime;
+        if (age < 800) {
+          flashOverlay = 1.0 - (age / 800); // Fades out over 800ms
+        }
+      }
+
+      if (isDimmed) {
+        ctx.fillStyle = 'rgba(255,255,255,0.02)';
+        ctx.shadowBlur = 0;
+        ctx.fillRect(x + cell.col * subSize + 0.5, y + cell.row * subSize + 0.5, subSize - 1, subSize - 1);
+      } else {
+        const parsedColor = baseColor.replace(')', `, ${finalOpacity})`).replace('hsl', 'hsla');
+        
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.shadowBlur = 0;
+        ctx.fillRect(x + cell.col * subSize + 1.5, y + cell.row * subSize + 1.5, subSize - 1, subSize - 1);
+
+        ctx.fillStyle = parsedColor;
+        if (isBlockHovered || isFilteredMatch) {
+          ctx.shadowColor = baseColor;
+          ctx.shadowBlur = 24; // Bigger, softer cinematic glow
+          ctx.fillRect(x + cell.col * subSize + 0.5, y + cell.row * subSize + 0.5, subSize - 1, subSize - 1);
+          // Added a bright core to the pixel without a hard outline
+          ctx.fillStyle = 'rgba(255,255,255,0.4)';
+          ctx.fillRect(x + cell.col * subSize + 1.5, y + cell.row * subSize + 1.5, subSize - 3, subSize - 3);
+        } else {
+          ctx.shadowBlur = flashOverlay > 0 ? 15 * flashOverlay : 0; // optimized: disabled continuous 2px blur
+          ctx.shadowColor = flashOverlay > 0 ? '#ffffff' : baseColor;
+          ctx.fillRect(x + cell.col * subSize + 0.5, y + cell.row * subSize + 0.5, subSize - 1, subSize - 1);
+          
+          if (flashOverlay > 0) {
+             ctx.fillStyle = `rgba(255, 255, 255, ${flashOverlay * 0.8})`;
+             ctx.fillRect(x + cell.col * subSize + 0.5, y + cell.row * subSize + 0.5, subSize - 1, subSize - 1);
+          }
+        }
+      }
+    }
+    ctx.shadowBlur = 0;
+  });
+
+  if (isTracked) {
+    ctx.strokeStyle = trackDirection === 'sent' ? 'rgba(255, 120, 0, 0.85)' : 'rgba(0, 229, 255, 0.85)';
+    ctx.lineWidth = 2.0;
+    ctx.strokeRect(x + 1, y + 1, size - 2, size - 2);
+  }
+}
+
+// Websocket sync
+function initRpcPolling() {
+    if (currentMode === 'LIVE') {
+        const capacity = cols * rows;
+        for (let i = 0; i < capacity; i++) {
+            blocks.push({
+                block_number: 26090000 + i,
+                timestamp: Math.floor(Date.now() / 1000) - ((capacity - i) * 12),
+                hash: '0x' + Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2),
+                tx_count: 50 + Math.floor(Math.random() * 150),
+                base_fee_gwei: 10 + Math.random() * 80,
+                contract_ratio: Math.random(),
+                whale_flag: Math.random() < 0.05 ? 1 : 0,
+                largest_tx_value_usd: 1000 + Math.random() * 10000,
+                dominant_type: 'Token Transfer',
+                hue: 200, saturation: 80, complexity: 0.5
+            });
+        }
+        updateStats();
+        generateSimulatedBlock(); 
+        setInterval(generateSimulatedBlock, 12000); 
+    }
+}
+
+
+// Perform daily trend analysis calculations and update widget UI
+function calculateDailyTrends() {
+  if (blocks.length === 0) return;
+  
+  let transfers = 0;
+  let swaps = 0;
+  let mints = 0;
+  let staking = 0;
+  
+  blocks.forEach(b => {
+    const txs = getBlockTransactions(b);
+    txs.forEach(t => {
+      if (t.type === 'Plain Transfer') transfers++;
+      else if (t.type === 'Token Swap') swaps++;
+      else if (t.type === 'NFT Mint') mints++;
+      else staking++;
+    });
+  });
+
+  const total = transfers + swaps + mints + staking || 1;
+  const pTransfers = (transfers / total) * 100;
+  const pSwaps = (swaps / total) * 100;
+  const pMints = (mints / total) * 100;
+
+  if (ratioBarTransfers) ratioBarTransfers.style.width = `${pTransfers}%`;
+  if (ratioBarSwaps) ratioBarSwaps.style.width = `${pSwaps}%`;
+  if (ratioBarMints) ratioBarMints.style.width = `${pMints}%`;
+
+  if (ratioBarTransfers) ratioBarTransfers.title = `Transfers: ${Math.round(pTransfers)}%`;
+  if (ratioBarSwaps) ratioBarSwaps.title = `Swaps: ${Math.round(pSwaps)}%`;
+  if (ratioBarMints) ratioBarMints.title = `Mints: ${Math.round(pMints)}%`;
+
+  let dominant = 'Transfers';
+  let maxCount = transfers;
+  
+  if (swaps > maxCount) {
+    dominant = 'DeFi Token Swaps 🔄';
+    maxCount = swaps;
+  }
+  if (mints > maxCount) {
+    dominant = 'NFT Minting 🎨';
+    maxCount = mints;
+  }
+  if (staking > maxCount) {
+    dominant = 'Contracts ⚙️';
+  }
+  if (maxCount === transfers) {
+    dominant = 'Capital Transfers 💸';
+  }
+
+  if (trendDominantVal) trendDominantVal.textContent = dominant;
+
+  // Compute gas fee trajectory (peaking vs. cooling)
+  if (blocks.length > 5) {
+    const recent = blocks.slice(-5);
+    const older = blocks.slice(0, 5);
+    const avgRecent = recent.reduce((sum, b) => sum + b.base_fee_gwei, 0) / 5;
+    const avgOlder = older.reduce((sum, b) => sum + b.base_fee_gwei, 0) / 5;
+    
+    if (avgRecent > avgOlder + (currentChain === 'solana' ? 0.00002 : 3)) {
+      if (trendGasVal) {
+        trendGasVal.textContent = 'Upward Spike 🔥';
+        trendGasVal.style.color = '#ff6b6b';
+      }
+    } else if (avgRecent < avgOlder - (currentChain === 'solana' ? 0.00002 : 3)) {
+      if (trendGasVal) {
+        trendGasVal.textContent = 'Cooling Down 📉';
+        trendGasVal.style.color = '#51cf66';
+      }
+    } else {
+      if (trendGasVal) {
+        trendGasVal.textContent = 'Stable ➡️';
+        trendGasVal.style.color = '';
+      }
+    }
+  } else {
+    if (trendGasVal) {
+      trendGasVal.textContent = 'Stable ➡️';
+      trendGasVal.style.color = '';
+    }
+  }
+  
+  updateRatioBarColors();
+}
+
+function updateStats() {
+  const weatherLine = document.getElementById('cinematic-weather-line');
+  if (weatherLine) {
+    if (typeof window.sessionTotalTx === 'undefined') {
+      window.sessionTotalTx = 0;
+      window.sessionTotalUsd = 0;
+      window.sessionDirectCount = 0;
+      window.tickerProxy = { count: 0, usd: 0 };
+    }
+    
+    let changed = false;
+    blocks.forEach(b => {
+      if (!b._counted) {
+        window.sessionTotalTx += b.tx_count;
+        const txs = getBlockTransactions(b);
+        txs.forEach(t => {
+          window.sessionTotalUsd += t.valueUsd || 0;
+          if (t.type === 'Plain Transfer') window.sessionDirectCount++;
+        });
+        b._counted = true;
+        changed = true;
+      }
+    });
+    
+    let totalTx = window.sessionTotalTx;
+    let totalUsd = window.sessionTotalUsd;
+    let directCount = window.sessionDirectCount;
+
+    let weatherCondition = "calm and quiet";
+    if (totalUsd > 10000000) weatherCondition = "experiencing heavy financial turbulence";
+    else if (totalTx > 1000) weatherCondition = "highly congested and expensive";
+    else if (directCount > totalTx * 0.5) weatherCondition = "dominated by everyday human activity";
+    
+    const numColor = THEMES[currentTheme].text === '#e2e2da' ? '#fff' : '#000';
+    
+    if (!weatherLine.hasAttribute('data-initialized')) {
+      weatherLine.innerHTML = `
+        <div style="font-family: 'Outfit', sans-serif; font-weight: 200; font-size: clamp(32px, 4vw, 54px); letter-spacing: -0.02em; line-height: 1.2; margin-bottom: 8px;">
+          Today, 
+          <div style="display: inline-block; perspective: 400px; vertical-align: bottom;">
+            <span id="ticker-count" style="display: inline-block; font-family: 'Space Mono', monospace; font-weight: 700; color: ${numColor}; text-shadow: 0 0 16px rgba(255,255,255,0.3); transform-style: preserve-3d; will-change: transform;">0</span>
+          </div> 
+          human payments moved 
+          <div style="display: inline-block; perspective: 400px; vertical-align: bottom;">
+            <span id="ticker-usd" style="display: inline-block; font-family: 'Space Mono', monospace; font-weight: 700; color: ${numColor}; text-shadow: 0 0 16px rgba(255,255,255,0.3); transform-style: preserve-3d; will-change: transform;">$0</span>
+          </div>
+        </div>
+        <div id="ticker-prose" style="font-family: 'Outfit', sans-serif; font-size: clamp(16px, 2vw, 24px); font-style: italic; font-weight: 300; opacity: 0.6; letter-spacing: 0.05em; transition: opacity 0.5s;">
+          The network weather is ${weatherCondition}.
+        </div>
+      `;
+      weatherLine.setAttribute('data-initialized', 'true');
+      
+      // Inject hardware-accelerated breathing animation
+      if (typeof gsap !== 'undefined') {
+        gsap.to(weatherLine, {
+          y: -4,
+          duration: 4,
+          repeat: -1,
+          yoyo: true,
+          ease: 'sine.inOut',
+          force3D: true
+        });
+      }
+    }
+
+    if (changed && typeof gsap !== 'undefined') {
+      const elCount = document.getElementById('ticker-count');
+      const elUsd = document.getElementById('ticker-usd');
+      const elProse = document.getElementById('ticker-prose');
+      
+      if (elCount && elUsd && elProse) {
+        elProse.textContent = `The network weather is ${weatherCondition}.`;
+        
+        // Wall Street Flip Animation
+        gsap.timeline()
+          .to([elCount, elUsd], { rotateX: 90, opacity: 0.5, duration: 0.25, ease: 'power2.in' })
+          .to([elCount, elUsd], { rotateX: 0, opacity: 1, duration: 0.5, ease: 'back.out(1.5)' });
+        
+        gsap.to(window.tickerProxy, {
+          count: directCount,
+          usd: totalUsd,
+          duration: 0.75,
+          ease: 'power2.out',
+          onUpdate: () => {
+            const vUsd = window.tickerProxy.usd;
+            const volStr = vUsd > 1000000 ? '$' + (vUsd / 1000000).toFixed(2) + 'M' : '$' + Math.floor(vUsd).toLocaleString();
+            elCount.textContent = Math.floor(window.tickerProxy.count).toLocaleString();
+            elUsd.textContent = volStr;
+            elCount.style.color = THEMES[currentTheme].text === '#e2e2da' ? '#fff' : '#000';
+            elUsd.style.color = THEMES[currentTheme].text === '#e2e2da' ? '#fff' : '#000';
+          }
+        });
+      }
+    }
+  }
+
+  if (blocks.length === 0) return;
+  
+  if (currentMode === 'LIVE') {
+    const latest = blocks[blocks.length - 1];
+    if (latestBlockVal) latestBlockVal.textContent = `#${latest.block_number}`;
+
+    const sumFee = blocks.reduce((sum, b) => sum + b.base_fee_gwei, 0);
+    const avgFee = sumFee / blocks.length;
+    
+    if (avgFeeVal) {
+      if (currentChain === 'solana') {
+        avgFeeVal.textContent = `${avgFee.toFixed(5)} SOL`;
+      } else {
+        avgFeeVal.textContent = `${avgFee.toFixed(1)} Gwei`;
+      }
+    }
+
+    const fillPercent = Math.min((blocks.length / maxTiles) * 100, 100);
+    if (gridFillVal) gridFillVal.textContent = `${Math.round(fillPercent)}%`;
+  } else {
+    if (latestBlockVal) latestBlockVal.textContent = selectedHistoricalDate;
+    
+    const sumFee = blocks.reduce((sum, b) => sum + b.base_fee_gwei, 0);
+    const avgFee = sumFee / blocks.length;
+    if (avgFeeVal) avgFeeVal.textContent = `${avgFee.toFixed(1)} Gwei`;
+    
+    if (gridFillVal) gridFillVal.textContent = `${blocks.length}`;
+  }
+
+  calculateDailyTrends();
+}
+
+function getBlockAtCoords(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+
+  const canvasX = (clientX - rect.left) * scaleX;
+  const canvasY = (clientY - rect.top) * scaleY;
+
+  const col = Math.floor(canvasX / tileSize);
+  const row = Math.floor(canvasY / tileSize);
+
+  if (col >= 0 && col < cols && row >= 0 && row < rows) {
+    const index = row * cols + col;
+    if (index >= 0 && index < blocks.length) {
+      return blocks[index];
+    }
+  }
+  return null;
+}
+
+function updateTooltip(block, e) {
+  if (!block || (detailsSidebar && detailsSidebar.classList.contains('open'))) {
+    hoverTooltip.classList.remove('visible');
+    return;
+  }
+
+  const txs = getBlockTransactions(block);
+  const totalBlockUsd = txs.reduce((sum, t) => sum + t.valueUsd, 0);
+  
+  let mood = 'Calm';
+  if (block.base_fee_gwei > (currentChain === 'solana' ? 0.00015 : 60)) mood = 'Congested 🔥';
+  else if (block.tx_count > (currentChain === 'solana' ? 2000 : 200)) mood = 'Bustling ⚡';
+  else if (block.tx_count > (currentChain === 'solana' ? 1500 : 100)) mood = 'Active';
+
+  const feeUnit = currentChain === 'solana' ? 'SOL' : 'Gwei';
+
+  hoverTooltip.innerHTML = `
+    <div style="font-family: 'Outfit', sans-serif; font-size: 13px; line-height: 1.5; color: rgba(255,255,255,0.9); padding: 4px;">
+      This block was mostly filled with <strong>${block.contract_ratio > 0.6 ? 'Trading Coins' : 'Direct Payments'}</strong>. 
+      <br><br>
+      Network traffic was <strong>${block.base_fee_gwei > 50 ? 'Congested and Expensive' : 'Quiet and Cheap'}</strong>, costing people around <strong>${block.base_fee_gwei.toFixed(0)} Gwei</strong>.
+      <br><br>
+      <span style="color: #00ff88;">${block.tx_count} Total Actions</span> • <span style="color: rgba(255,255,255,0.5);">$${totalBlockUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })} Moved</span>
+    </div>
+  `;
+
+  // GSAP Spring Tooltip Interpolation
+  if (typeof gsap !== 'undefined') {
+    // Add an offset so cursor doesn't obscure it
+    gsap.to(hoverTooltip, { 
+      x: e.clientX + 20, 
+      y: e.clientY + 20, 
+      duration: 0.5, 
+      ease: 'power3.out',
+      overwrite: 'auto'
+    });
+  } else {
+    hoverTooltip.style.left = `${e.clientX + 20}px`;
+    hoverTooltip.style.top = `${e.clientY + 20}px`;
+  }
+  hoverTooltip.classList.add('visible');
+}
+
+canvas.addEventListener('mousemove', (e) => {
+  lastInteractionTime = Date.now();
+  const block = getBlockAtCoords(e.clientX, e.clientY);
+  if (block !== hoveredBlock) {
+    hoveredBlock = block;
+  }
+  updateTooltip(block, e);
+});
+
+canvas.addEventListener('mouseleave', () => {
+  hoveredBlock = null;
+  hoverTooltip.classList.remove('visible');
+});
+
+canvas.addEventListener('click', (e) => {
+  lastInteractionTime = Date.now();
+  const block = getBlockAtCoords(e.clientX, e.clientY);
+  if (block) {
+    hoverTooltip.classList.remove('visible');
+    activePopoverBlock = block;
+    showBlockDetails(block);
+
+    // Trigger Artsy Radial Ripple Wave GSAP Timeline
+    const idx = blocks.indexOf(block);
+    if (idx !== -1 && typeof gsap !== 'undefined') {
+      rippleOriginCol = idx % cols;
+      rippleOriginRow = Math.floor(idx / cols);
+      rippleProgress.value = 0;
+
+      gsap.killTweensOf(rippleProgress);
+      gsap.to(rippleProgress, {
+        value: 1.0,
+        duration: 1.2,
+        ease: 'power2.out',
+        onComplete: () => {
+          rippleOriginCol = -1;
+          rippleOriginRow = -1;
+          rippleProgress.value = 0;
+        }
+      });
+    }
+  }
+});
+
+// Render Analyst Network graph
+function renderNetworkGraph(block) {
+  const gCanvas = document.getElementById('network-canvas');
+  if (!gCanvas) return;
+  const gCtx = gCanvas.getContext('2d');
+  const theme = THEMES[currentTheme];
+
+  gCtx.clearRect(0, 0, gCanvas.width, gCanvas.height);
+  
+  const txs = getBlockTransactions(block);
+  if (txs.length === 0) return;
+
+  const width = gCanvas.width;
+  const height = gCanvas.height;
+
+  const nodes = [
+    { id: 'Source', x: width * 0.15, y: height * 0.5, label: 'Source Wallet' },
+    { id: 'Router', x: width * 0.5, y: height * 0.5, label: 'Contract/Router' },
+    { id: 'Dest1', x: width * 0.85, y: height * 0.25, label: 'Exchange Wallet' },
+    { id: 'Dest2', x: width * 0.85, y: height * 0.75, label: 'Cold Storage' }
+  ];
+
+  txs.forEach((tx, idx) => {
+    let start = nodes[0];
+    let end = nodes[1];
+    if (idx % 3 === 1) {
+      start = nodes[1];
+      end = nodes[2];
+    } else if (idx % 3 === 2) {
+      start = nodes[1];
+      end = nodes[3];
+    }
+
+    gCtx.strokeStyle = tx.label.includes('Tracked') ? 'rgba(0, 229, 255, 0.6)' : theme.accent.replace(')', ', 0.35)').replace('hsl', 'hsla');
+    gCtx.lineWidth = Math.max(1, Math.min(4, tx.valueUsd / 2000));
+    
+    gCtx.beginPath();
+    gCtx.moveTo(start.x, start.y);
+    gCtx.lineTo(end.x, end.y);
+    gCtx.stroke();
+
+    const midX = (start.x + end.x) / 2;
+    const midY = (start.y + end.y) / 2;
+    
+    gCtx.fillStyle = gCtx.strokeStyle;
+    gCtx.beginPath();
+    gCtx.arc(midX, midY, 3, 0, Math.PI * 2);
+    gCtx.fill();
+  });
+
+  nodes.forEach(node => {
+    gCtx.fillStyle = theme.bg;
+    gCtx.strokeStyle = theme.graphNode;
+    gCtx.lineWidth = 2;
+    
+    gCtx.beginPath();
+    gCtx.arc(node.x, node.y, 10, 0, Math.PI * 2);
+    gCtx.fill();
+    gCtx.stroke();
+
+    gCtx.fillStyle = theme.graphText;
+    gCtx.font = '500 8px Outfit';
+    gCtx.textAlign = 'center';
+    gCtx.fillText(node.id, node.x, node.y + 3);
+
+    gCtx.fillStyle = theme.graphText;
+    gCtx.font = '500 7px Outfit';
+    gCtx.fillText(node.label, node.x, node.y - 14);
+  });
+}
+
+function showBlockDetails(block) {
+  if (popBlockNum) popBlockNum.textContent = `#${block.block_number}`;
+  
+  const txs = getBlockTransactions(block);
+  const primaryTx = txs[0] || {
+    from: '0x0000000000000000000000000000000000000000',
+    to: '0x0000000000000000000000000000000000000000',
+    valueEth: 0,
+    valueUsd: 0,
+    asset: 'ETH',
+    type: 'Plain Transfer',
+    gasPriceGwei: 15,
+    confirmations: 12,
+    label: 'None',
+    anomaly: 'None'
+  };
+
+  const totalBlockUsd = txs.reduce((sum, t) => sum + t.valueUsd, 0);
+  if (popAmountUsd) popAmountUsd.textContent = `$${totalBlockUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (popTime) popTime.textContent = `${Math.floor((Date.now() - block.timestamp * 1000) / 1000)}s ago`;
+
+  // Render Subpixel Interactive Bar
+  const subpixelGrid = document.getElementById('subpixel-inspect-grid');
+  if (subpixelGrid) {
+    subpixelGrid.innerHTML = '';
+    const density = Math.max(0.1, Math.min(0.85, block.tx_count / 300));
+    const targetOnCount = Math.max(6, Math.floor(density * 64));
+    
+    for (let i = 0; i < targetOnCount; i++) {
+      const tx = txs[i % txs.length] || primaryTx;
+      const cell = document.createElement('div');
+      cell.classList.add('subpixel-inspect-cell');
+      
+      let baseColor = PALETTES[currentPalette][tx.type] || PALETTES[currentPalette]['default'];
+      if (currentPalette === 'monochrome') {
+        const theme = THEMES[currentTheme];
+        baseColor = theme.accent;
+      }
+      cell.style.backgroundColor = baseColor;
+      cell.title = `${tx.type} - $${tx.valueUsd.toLocaleString()}`;
+
+      // Click to open detailed single Transaction Inspector Modal overlay
+      cell.addEventListener('click', () => {
+        const overlay = document.getElementById('tx-inspector-overlay');
+        document.getElementById('tx-inspect-value-usd').textContent = `$${tx.valueUsd.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+        document.getElementById('tx-inspect-amount').textContent = `${tx.valueEth.toFixed(4)} ${currentChain === 'solana' ? 'SOL' : tx.asset}`;
+        document.getElementById('tx-inspect-type').textContent = tx.type;
+        document.getElementById('tx-inspect-gas').textContent = currentChain === 'solana' ? `${tx.gasPriceGwei / 1000000} SOL` : `${tx.gasPriceGwei} Gwei`;
+        document.getElementById('tx-inspect-protocol').textContent = tx.label;
+        document.getElementById('tx-inspect-from').textContent = tx.from;
+        document.getElementById('tx-inspect-to').textContent = tx.to;
+        overlay.classList.add('open');
+      });
+      subpixelGrid.appendChild(cell);
+    }
+  }
+  
+  if (popFeePaid) {
+    if (currentChain === 'solana') {
+      popFeePaid.textContent = `$${(block.base_fee_gwei * 150).toFixed(4)} (${block.base_fee_gwei} SOL)`;
+    } else {
+      popFeePaid.textContent = `$${(block.base_fee_gwei * 0.05).toFixed(2)} (${block.base_fee_gwei} Gwei)`;
+    }
+  }
+
+  let direction = 'No tracked wallet';
+  if (trackedAddress && trackedAddress.length > 0) {
+    const match = txs.find(tx => tx.from.includes(trackedAddress) || tx.to.includes(trackedAddress));
+    if (match) {
+      direction = match.from.includes(trackedAddress) ? 'Sent ↗' : 'Received ↙';
+    } else {
+      direction = 'Not involved';
+    }
+  }
+  if (popDirection) popDirection.textContent = direction;
+
+  if (popFrom) popFrom.textContent = primaryTx.from;
+  if (popTo) popTo.textContent = primaryTx.to;
+
+  if (popTraderType) popTraderType.textContent = primaryTx.type;
+  if (popTraderAsset) popTraderAsset.textContent = currentChain === 'solana' ? 'SOL' : primaryTx.asset;
+  
+  if (popTraderGas) {
+    if (currentChain === 'solana') {
+      popTraderGas.textContent = `${primaryTx.gasPriceGwei / 1000000} SOL`;
+    } else {
+      popTraderGas.textContent = `${primaryTx.gasPriceGwei} Gwei`;
+    }
+  }
+
+  if (popTraderValueUsd) popTraderValueUsd.textContent = `$${primaryTx.valueUsd.toLocaleString()}`;
+
+  const seed = parseInt(block.hash.substring(4, 6), 16);
+  if (popAnalystCluster) popAnalystCluster.textContent = `Cluster #${seed.toString(16).toUpperCase()}`;
+  if (popAnalystLabel) popAnalystLabel.textContent = primaryTx.label;
+  
+  const activeAnomaly = txs.find(t => t.anomaly !== 'None');
+  if (popAnalystAnomaly) popAnalystAnomaly.textContent = activeAnomaly ? activeAnomaly.anomaly : 'None';
+  if (popAnalystFirstSeen) popAnalystFirstSeen.textContent = `${(seed % 30) + 1} days ago`;
+
+  let mood = 'Calm';
+  if (block.base_fee_gwei > (currentChain === 'solana' ? 0.00015 : 60)) mood = 'Congested 🔥';
+  else if (block.tx_count > (currentChain === 'solana' ? 2000 : 200)) mood = 'Bustling ⚡';
+  else if (block.tx_count > (currentChain === 'solana' ? 1500 : 100)) mood = 'Active';
+  if (popMood) popMood.textContent = mood;
+
+  if (popTxCount) popTxCount.textContent = block.tx_count;
+  if (popHash) popHash.textContent = block.hash;
+  if (popExplorerLink) popExplorerLink.href = currentChain === 'solana' ? `https://solscan.io/block/${block.block_number}` : `https://etherscan.io/block/${block.block_number}`;
+  if (popCopyHashBtn) popCopyHashBtn.textContent = 'Copy';
+
+  tabBtns.forEach(b => b.classList.remove('active'));
+  tabPanes.forEach(p => p.classList.remove('active'));
+  if (tabBtns[0]) tabBtns[0].classList.add('active');
+  if (tabPanes[0]) tabPanes[0].classList.add('active');
+
+  // Mutual exclusion: Close Settings drawer if details sidebar opens
+  if (archiveDrawer) {
+    archiveDrawer.classList.remove('open');
+  }
+
+  // Open sidebar drawer and shift layout
+  if (detailsSidebar) {
+    detailsSidebar.classList.add('open');
+  }
+  if (canvasContainer) {
+    canvasContainer.classList.add('sidebar-open');
+  }
+  
+  // Staggered resize to recalculate columns/rows inside the squished layout
+  setTimeout(resizeCanvas, 420);
+}
+
+// Drawer Toggling (Mutual exclusion: Close details sidebar if Settings drawer opens)
+archiveToggleBtn.addEventListener('click', () => {
+  lastInteractionTime = Date.now();
+  archiveDrawer.classList.toggle('open');
+  if (archiveDrawer.classList.contains('open') && detailsSidebar) {
+    detailsSidebar.classList.remove('open');
+    canvasContainer.classList.remove('sidebar-open');
+    setTimeout(resizeCanvas, 420);
+  }
+});
+
+closeDrawerBtn.addEventListener('click', () => {
+  lastInteractionTime = Date.now();
+  archiveDrawer.classList.remove('open');
+});
+
+// Render Archive Calendar Days (Dynamic current month based on today's local date)
+function renderCalendar() {
+  calendarDaysGrid.innerHTML = '';
+  
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth(); // 0-indexed (0 is Jan, 11 is Dec)
+  
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  
+  // Update header text to show current month and year
+  const monthYearLabel = document.querySelector('.archive-header h3') || document.querySelector('.archive-header-title');
+  if (monthYearLabel) {
+    monthYearLabel.textContent = `${monthNames[month]} ${year}`;
+  }
+
+  // Get first day of the month and number of days
+  const firstDayIndex = new Date(year, month, 1).getDay(); // Day of week (0-6)
+  const totalDays = new Date(year, month + 1, 0).getDate(); // Days in current month
+
+  // Render blank days for offset
+  for (let i = 0; i < firstDayIndex; i++) {
+    const blank = document.createElement('div');
+    blank.classList.add('calendar-day', 'empty-day');
+    calendarDaysGrid.appendChild(blank);
+  }
+
+  // Render dynamic days
+  for (let day = 1; day <= totalDays; day++) {
+    const dayEl = document.createElement('div');
+    dayEl.classList.add('calendar-day');
+    dayEl.textContent = day;
+
+    const formattedDay = day < 10 ? `0${day}` : day;
+    const formattedMonth = (month + 1) < 10 ? `0${month + 1}` : (month + 1);
+    const dateStr = `${year}-${formattedMonth}-${formattedDay}`;
+    dayEl.setAttribute('data-date', dateStr);
+
+    // If day is today or in the past, allow replaying historical data
+    if (day <= today.getDate()) {
+      const category = getCategoryForDay(day);
+      const dot = document.createElement('span');
+      dot.classList.add('day-dot');
+      
+      if (category === 'zen') {
+        dot.classList.add('calm');
+      } else if (category === 'dragon') {
+        dot.classList.add('congested');
+      } else {
+        dot.classList.add('active');
+      }
+      dayEl.appendChild(dot);
+
+      if (day === today.getDate()) {
+        dayEl.classList.add('active-selected');
+        dayEl.addEventListener('click', () => {
+          switchToLive();
+        });
+      } else {
+        dayEl.addEventListener('click', () => {
+          loadHistoricalPortrait(dateStr, day);
+        });
+      }
+    } else {
+      dayEl.classList.add('empty-day');
+    }
+
+    calendarDaysGrid.appendChild(dayEl);
+  }
+}
+
+// Playback ticker loop helper
+function tickPlayback() {
+  if (playbackIndex >= playbackFullList.length) {
+    pausePlayback();
+    return;
+  }
+  
+  playbackIndex++;
+  playbackSlider.value = playbackIndex;
+  blocks = playbackFullList.slice(0, playbackIndex);
+  updateStats();
+  
+  if (blocks.length > 0) {
+    audio.playBlockTones(blocks[blocks.length - 1]);
+  }
+  
+  playbackCounter.textContent = `${playbackIndex} / ${playbackFullList.length} Blocks`;
+}
+
+function startPlayback() {
+  if (isPlayingPlayback) return;
+  isPlayingPlayback = true;
+  playbackPlayBtn.textContent = 'Pause';
+  
+  if (playbackIndex >= playbackFullList.length) {
+    playbackIndex = 0;
+    blocks = [];
+    playbackSlider.value = 0;
+  }
+  
+  playbackIntervalId = setInterval(tickPlayback, 125);
+}
+
+// Sound playback play listener triggers audio context
+function pausePlayback() {
+  if (!isPlayingPlayback) return;
+  isPlayingPlayback = false;
+  playbackPlayBtn.textContent = 'Play';
+  clearInterval(playbackIntervalId);
+}
+
+// Slider scrub listener
+playbackSlider.addEventListener('input', (e) => {
+
+    // Parallax Time-Scrubbing Effect
+    const canvasContainer = document.getElementById('canvas-container');
+    if (canvasContainer) {
+      canvasContainer.style.transition = 'transform 0.1s ease-out, filter 0.1s ease-out';
+      // Slight 3D scale and tilt backwards as you drag to simulate moving fast
+      canvasContainer.style.transform = 'perspective(1000px) rotateX(2deg) scale(0.95) translateZ(-50px)';
+      canvasContainer.style.filter = 'blur(1px)';
+      
+      // Reset after dragging stops
+      clearTimeout(window.parallaxScrubTimer);
+      window.parallaxScrubTimer = setTimeout(() => {
+        canvasContainer.style.transform = 'perspective(1000px) rotateX(0deg) scale(1) translateZ(0)';
+        canvasContainer.style.filter = 'blur(0)';
+      }, 150);
+    }
+
+  pausePlayback();
+  playbackIndex = parseInt(e.target.value);
+  blocks = playbackFullList.slice(0, playbackIndex);
+  updateStats();
+  playbackCounter.textContent = `${playbackIndex} / ${playbackFullList.length} Blocks`;
+  lastInteractionTime = Date.now();
+});
+
+// Playback button toggler
+playbackPlayBtn.addEventListener('click', () => {
+  lastInteractionTime = Date.now();
+  if (isPlayingPlayback) {
+    pausePlayback();
+  } else {
+    audio.init();
+    startPlayback();
+  }
+});
+
+// Transition Layouts
+async function loadHistoricalPortrait(dateStr, dayNum) {
+  lastInteractionTime = Date.now();
+  archiveDrawer.classList.remove('open');
+  pausePlayback();
+
+  lastInteractionTime = Date.now();
+  archiveDrawer.classList.remove('open');
+  pausePlayback();
+  
+  if (currentMode === 'LIVE') {
+    liveBlocksCache = [...blocks];
+  }
+  
+  const dateObj = new Date(dateStr + 'T00:00:00');
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const monthStr = monthNames[dateObj.getMonth()];
+  const formattedFriendlyDate = `${monthStr} ${dayNum}, ${dateObj.getFullYear()}`;
+
+  currentMode = 'HISTORICAL';
+  selectedHistoricalDate = formattedFriendlyDate;
+  historicalDayNumber = dayNum;
+  
+  const category = getCategoryForDay(dayNum);
+  const categoryLabel = getCategoryLabel(category);
+  
+  liveIndicator.className = 'status-indicator historical-mode';
+  modeStatusText.textContent = `Viewing Archives: ${categoryLabel}`;
+  
+  // Inject a floating context card explaining what the user is seeing
+  let contextCard = document.getElementById('historical-context-card');
+  if (!contextCard) {
+    contextCard = document.createElement('div');
+    contextCard.id = 'historical-context-card';
+    Object.assign(contextCard.style, {
+      position: 'absolute', top: '16px', left: '50%', transform: 'translateX(-50%)',
+      zIndex: '6000', background: 'rgba(10,12,16,0.88)', backdropFilter: 'blur(16px)',
+      border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px',
+      padding: '12px 20px', textAlign: 'center', pointerEvents: 'none', opacity: '0',
+      fontFamily: "'Outfit', sans-serif", color: 'rgba(255,255,255,0.85)',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.4)', maxWidth: '520px', lineHeight: '1.5'
+    });
+    document.querySelector('.canvas-container').appendChild(contextCard);
+  }
+
+  const dateLabel = formattedFriendlyDate;
+  contextCard.innerHTML = `
+    <span style="font-family:'Space Mono',monospace; font-size:9px; letter-spacing:0.2em; text-transform:uppercase; opacity:0.5; display:block; margin-bottom:4px;">Archive</span>
+    <span style="font-size:14px; font-weight:500;">${dateLabel} — ${categoryLabel}</span>
+    <span style="display:block; font-size:12px; font-weight:300; opacity:0.65; margin-top:4px;">Each square = one block (~12s of time). Colors = transaction types. <strong style="color:#00ff88; font-weight:500;">View Portrait</strong> melts the grid into art.</span>
+  `;
+  contextCard.style.display = 'block';
+  if (typeof gsap !== 'undefined') {
+    gsap.fromTo(contextCard, { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out' });
+    gsap.to(contextCard, { opacity: 0, y: -10, duration: 0.5, delay: 7, ease: 'power2.in', onComplete: () => { contextCard.style.display = 'none'; } });
+  }
+  
+  statsBlockLabel.textContent = 'PORTRAIT DATE';
+  statsFillLabel.textContent = 'BLOCKS MINED';
+  
+  historicalDateLabel.textContent = `${formattedFriendlyDate} — ${categoryLabel}`;
+  historicalBanner.classList.add('active');
+
+  // Try to fetch real blocks from the backend
+  let fetchedBlocks = [];
+  try {
+    // Resolve HTTP host address dynamically
+    const protocol = window.location.protocol;
+    const host = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      ? `${window.location.hostname}:8080`
+      : 'blockchain-mosaic-production.up.railway.app'; // Change to match your production API domain
+    
+    const response = await fetch(`${protocol}//${host}/api/history/${dateStr}`);
+    if (response.ok) {
+      const resData = await response.json();
+      if (resData && resData.data && resData.data.length > 0) {
+        fetchedBlocks = resData.data;
+        console.log(`Successfully fetched ${fetchedBlocks.length} real historical blocks for ${dateStr}`);
+      }
+    }
+  } catch (err) {
+    console.warn(`Could not fetch live database blocks for ${dateStr}, using fallback generator:`, err.message);
+  }
+
+  // If no database blocks were returned, fall back to generative mock blocks
+  playbackFullList = fetchedBlocks.length > 0 ? fetchedBlocks : generateMockHistoryForDate(dateStr);
+  playbackIndex = 0;
+  blocks = [];
+  
+  playbackSlider.max = playbackFullList.length;
+  playbackSlider.value = 0;
+  playbackCounter.textContent = `0 / ${playbackFullList.length} Blocks`;
+  playbackPlayBtn.textContent = 'Play';
+  playbackControls.classList.add('active');
+
+  updateStats();
+  
+  document.querySelectorAll('.calendar-day').forEach(el => {
+    el.classList.remove('active-selected');
+  });
+  const days = document.querySelectorAll('.calendar-day');
+  // Find matching day element by data-date attribute
+  const match = Array.from(days).find(el => el.getAttribute('data-date') === dateStr);
+  if (match) {
+    match.classList.add('active-selected');
+  }
+}
+
+function switchToLive() {
+  lastInteractionTime = Date.now();
+  archiveDrawer.classList.remove('open');
+  pausePlayback();
+  playbackControls.classList.remove('active');
+
+  // Reset canvas filter in case portrait mode was active
+  const mosaicCanvas = document.getElementById('mosaic-canvas');
+  if (mosaicCanvas) gsap.to(mosaicCanvas, { filter: 'saturate(100%) contrast(100%) brightness(1) blur(0px)', duration: 0.5 });
+  const artOv = document.getElementById('art-synthesis-overlay');
+  if (artOv) { artOv.style.display = 'none'; }
+  
+  if (currentMode === 'HISTORICAL' || currentMode === 'ART_SYNTHESIS') {
+    currentMode = 'LIVE';
+    
+    tileSize = 64;
+    resizeCanvas();
+    
+    blocks = [...liveBlocksCache];
+    
+    liveIndicator.className = 'status-indicator live';
+    modeStatusText.textContent = 'A Living Portrait of the Blockchain';
+    statsBlockLabel.textContent = 'LATEST BLOCK';
+    statsFillLabel.textContent = 'GRID FILL';
+    
+    historicalBanner.classList.remove('active');
+    updateStats();
+    const ctxCard = document.getElementById('historical-context-card');
+    if (ctxCard) ctxCard.style.display = 'none';
+  }
+
+  document.querySelectorAll('.calendar-day').forEach(el => {
+    el.classList.remove('active-selected');
+  });
+  const days = document.querySelectorAll('.calendar-day');
+  if (days[10]) {
+    days[10].classList.add('active-selected');
+  }
+}
+
+returnLiveBtn.addEventListener('click', switchToLive);
+
+popCopyHashBtn.addEventListener('click', () => {
+  lastInteractionTime = Date.now();
+  if (activePopoverBlock) {
+    navigator.clipboard.writeText(activePopoverBlock.hash).then(() => {
+      popCopyHashBtn.textContent = 'Copied!';
+    });
+  }
+});
+
+// Transaction Inspector Dialog Closes
+const closeTxInspectorBtn = document.getElementById('close-tx-inspector');
+const txInspectorOverlay = document.getElementById('tx-inspector-overlay');
+if (closeTxInspectorBtn && txInspectorOverlay) {
+  closeTxInspectorBtn.addEventListener('click', () => {
+    txInspectorOverlay.classList.remove('open');
+  });
+  txInspectorOverlay.addEventListener('click', (e) => {
+    if (e.target === txInspectorOverlay) {
+      txInspectorOverlay.classList.remove('open');
+    }
+  });
+}
+
+// URL Parameters Router Logic
+function parseUrlParameters() {
+  const params = new URLSearchParams(window.location.search);
+  
+  // 1. Palette Router
+  const palette = params.get('palette');
+  if (palette && PALETTES[palette]) {
+    currentPalette = palette;
+    if (paletteSelect) paletteSelect.value = palette;
+  }
+  
+  // 2. Theme Router
+  const theme = params.get('theme');
+
+  if (theme && THEMES[theme]) {
+    currentTheme = theme;
+
+    document.body.className = theme + '-theme';
+    if (themeToggleBtn) {
+      themeToggleBtn.textContent = theme === 'warmGray' ? 'Toggle Charcoal Theme' : 'Toggle Warm Gray Theme';
+    }
+    const ts = document.getElementById('theme-select');
+    if (ts) ts.value = currentTheme;
+  }
+  
+  // Apply all settings after URL params are loaded
+  applyAllSettings();
+
+  // 3. Chain Router
+  const chain = params.get('chain');
+  if (chain && ['ethereum', 'base', 'arbitrum', 'solana'].includes(chain)) {
+    currentChain = chain;
+    if (chainSelect) chainSelect.value = chain;
+    
+    // Trigger chain changes behavior
+    if (chain === 'ethereum') {
+      // Keep live WS connection
+    } else {
+      let cadence = 2000;
+      if (chain === 'arbitrum') cadence = 500;
+      else if (chain === 'solana') cadence = 400;
+      chainIntervalId = setInterval(generateSimulatedBlock, cadence);
+    }
+  }
+}
+
+function updateUrlParameters() {
+  const params = new URLSearchParams();
+  params.set('palette', currentPalette);
+  params.set('theme', currentTheme);
+  params.set('chain', currentChain);
+  window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+}
+
+// Attach sync updates to select boxes
+if (paletteSelect) {
+  paletteSelect.addEventListener('change', () => {
+    updateUrlParameters();
+  });
+}
+if (chainSelect) {
+  chainSelect.addEventListener('change', () => {
+    updateUrlParameters();
+  });
+}
+if (themeToggleBtn) {
+  themeToggleBtn.addEventListener('click', () => {
+    updateUrlParameters();
+  });
+}
+
+// GSAP Interface Entrance & Focus Animations
+function triggerGsapEntrances() {
+  if (typeof gsap === 'undefined') return;
+
+  // Staggered load for header controls
+  gsap.from('.brand-group', {
+    duration: 1.2,
+    y: -30,
+    opacity: 0,
+    ease: 'power4.out'
+  });
+
+  gsap.from('.tracker-bar, #archive-toggle-btn, #guide-open-btn', {
+    duration: 1.0,
+    y: -20,
+    opacity: 0,
+    stagger: 0.15,
+    ease: 'power3.out',
+    delay: 0.2
+  });
+
+  // Stagger stats block cards
+  gsap.from('.stats-banner .stat-item', {
+    duration: 0.8,
+    opacity: 0,
+    scale: 0.9,
+    stagger: 0.08,
+    ease: 'back.out(1.5)',
+    delay: 0.4
+  });
+
+  // Slide up footer legend
+  gsap.from('.app-footer', {
+    duration: 1.0,
+    y: 40,
+    opacity: 0,
+    ease: 'power3.out',
+    delay: 0.6
+  });
+}
+
+// Override enter/exit focus mode using GSAP timelines for smooth aesthetic transition
+function enterFocusMode() {
+  if (typeof gsap !== 'undefined') {
+    const tl = gsap.timeline({
+      onComplete: () => {
+        setTimeout(resizeCanvas, 100);
+      }
+    });
+
+    // Close drawers first
+    if (archiveDrawer) archiveDrawer.classList.remove('open');
+    if (detailsSidebar) detailsSidebar.classList.remove('open');
+    if (canvasContainer) canvasContainer.classList.remove('sidebar-open');
+
+    // Fade and slide out UI controls
+    tl.to('.app-header, .app-footer, #historical-banner', {
+      duration: 0.4,
+      y: -20,
+      opacity: 0,
+      pointerEvents: 'none',
+      visibility: 'hidden',
+      ease: 'power2.inOut'
+    });
+
+    // Expand canvas container to full view
+    tl.to('.canvas-container', {
+      duration: 0.6,
+      padding: 0,
+      margin: 0,
+      width: '100vw',
+      height: '100vh',
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      zIndex: 10,
+      backgroundColor: THEMES[currentTheme].bg,
+      ease: 'power3.inOut'
+    }, '-=0.2');
+
+    // Smoothly morph into floating, organic drift layout
+    tl.to(focusFloatProgress, {
+      value: 1.0,
+      duration: 1.5,
+      ease: 'power2.out'
+    }, '-=0.4');
+
+    document.body.classList.add('focus-mode');
+  } else {
+    document.body.classList.add('focus-mode');
+    if (archiveDrawer) archiveDrawer.classList.remove('open');
+    if (detailsSidebar) detailsSidebar.classList.remove('open');
+    if (canvasContainer) canvasContainer.classList.remove('sidebar-open');
+    setTimeout(resizeCanvas, 550);
+  }
+}
+
+function exitFocusMode() {
+  if (typeof gsap !== 'undefined') {
+    const tl = gsap.timeline({
+      onComplete: () => {
+        // Remove GSAP-applied inline style overrides so it snaps back to standard CSS layout
+        const container = document.querySelector('.canvas-container');
+        if (container) {
+          container.style.position = '';
+          container.style.width = '';
+          container.style.height = '';
+          container.style.top = '';
+          container.style.left = '';
+          container.style.padding = '';
+          container.style.margin = '';
+          container.style.zIndex = '';
+          container.style.backgroundColor = '';
+        }
+        setTimeout(resizeCanvas, 100);
+      }
+    });
+
+    document.body.classList.remove('focus-mode');
+
+    // Smoothly settle back into rigid grid coordinates
+    tl.to(focusFloatProgress, {
+      value: 0.0,
+      duration: 0.8,
+      ease: 'power2.inOut'
+    });
+
+    // Restore canvas container layouts
+    tl.to('.canvas-container', {
+      duration: 0.5,
+      position: 'relative',
+      width: '100%',
+      height: '100%',
+      zIndex: '',
+      ease: 'power3.inOut'
+    }, '-=0.4');
+
+    // Fade and slide back UI elements
+    tl.to('.app-header, .app-footer', {
+      duration: 0.5,
+      y: 0,
+      opacity: 1,
+      pointerEvents: 'all',
+      visibility: 'visible',
+      ease: 'power3.out'
+    }, '-=0.2');
+  } else {
+    document.body.classList.remove('focus-mode');
+    setTimeout(resizeCanvas, 550);
+  }
+}
+
+// Resume Web Audio on first user interaction (browser security policy)
+window.addEventListener('click', () => {
+  if (audio) {
+    audio.init();
+    if (audio.ctx && audio.ctx.state === 'suspended') {
+      audio.ctx.resume();
+    }
+  }
+}, { once: true });
+
+// Run
+parseUrlParameters();
+renderCalendar();
+initRpcPolling();
+requestAnimationFrame(draw);
+updateStats();
+applyThemeStyles();
+updateRatioBarColors();
+updateLegend();
+triggerGsapEntrances();
+
+
+let clickedLegendFilter = null;
+let filterCountTooltip = document.getElementById('filter-count-tooltip');
+if (!filterCountTooltip) {
+  filterCountTooltip = document.createElement('div');
+  filterCountTooltip.id = 'filter-count-tooltip';
+  filterCountTooltip.style.position = 'absolute';
+  filterCountTooltip.style.bottom = '50px';
+  filterCountTooltip.style.left = '32px';
+  filterCountTooltip.style.fontFamily = "'Space Mono', monospace";
+  filterCountTooltip.style.fontSize = '12px';
+  filterCountTooltip.style.background = 'var(--panel-bg)';
+  filterCountTooltip.style.border = '1px solid var(--border-color)';
+  filterCountTooltip.style.backdropFilter = 'blur(20px)';
+  filterCountTooltip.style.borderRadius = '12px';
+  filterCountTooltip.style.boxShadow = '0 20px 40px rgba(0,0,0,0.2)';
+  filterCountTooltip.style.padding = '12px 16px';
+  filterCountTooltip.style.color = '#fff';
+  filterCountTooltip.style.background = 'rgba(8,9,12,0.95)';
+  filterCountTooltip.style.padding = '12px 18px';
+  filterCountTooltip.style.borderRadius = '8px';
+  filterCountTooltip.style.border = '1px solid rgba(255,255,255,0.15)';
+  filterCountTooltip.style.pointerEvents = 'none';
+  filterCountTooltip.style.opacity = '0';
+  document.body.appendChild(filterCountTooltip);
+}
+
+const legendEl = document.getElementById('legend-container');
+if (legendEl) {
+  legendEl.addEventListener('click', (e) => {
+    const item = e.target.closest('.legend-item');
+    if (!item) return;
+    const text = item.textContent.trim();
+    
+    let typeKey = null;
+    if (text.includes('Plain Transfer') || text.includes('Direct Payments')) typeKey = 'Plain Transfer';
+    else if (text.includes('Token Swap') || text.includes('Trading Coins')) typeKey = 'Token Swap';
+    else if (text.includes('NFT Mint') || text.includes('Digital Art')) typeKey = 'NFT Mint';
+    if (!typeKey) return;
+
+    if (clickedLegendFilter === typeKey) {
+      clickedLegendFilter = null;
+      document.querySelectorAll('.legend-item').forEach(el => el.style.opacity = '1');
+      if (typeof gsap !== 'undefined') gsap.to(filterCountTooltip, { opacity: 0, y: 10, duration: 0.3 });
+    } else {
+      clickedLegendFilter = typeKey;
+      document.querySelectorAll('.legend-item').forEach(el => el.style.opacity = '0.3');
+      item.style.opacity = '1';
+      
+      let count = 0;
+      let totalUsd = 0;
+      let explanation = "";
+      let titleName = "";
+      
+      if (typeKey === 'Plain Transfer') {
+        titleName = "Direct Payments";
+        explanation = "Simple wallet-to-wallet transfers. These represent the everyday economy of people sending money to one another.";
+      } else if (typeKey === 'Token Swap') {
+        titleName = "Trading Coins";
+        explanation = "People actively swapping different cryptocurrencies on decentralized exchanges. High activity here usually means the market is volatile.";
+      } else if (typeKey === 'NFT Mint') {
+        titleName = "Digital Art & NFTs";
+        explanation = "The creation and trading of unique digital assets, collectibles, and artwork permanently recorded on the network.";
+      }
+
+      blocks.slice(-maxTiles).forEach(b => {
+        getBlockTransactions(b).forEach(t => {
+          if (t.type === typeKey) {
+            count++;
+            totalUsd += t.valueUsd || 0;
+          }
+        });
+      });
+      
+      const usdString = totalUsd > 1000000 ? '$' + (totalUsd / 1000000).toFixed(1) + 'M' : '$' + totalUsd.toLocaleString(undefined, { maximumFractionDigits: 0 });
+
+      filterCountTooltip.innerHTML = `
+        <div style="font-family: 'Outfit', sans-serif; max-width: 280px; text-align: left; line-height: 1.6; padding: 8px 4px; color: var(--text-primary);">
+          <div style="font-size: 11px; font-weight: 600; color: ${PALETTES[currentPalette][typeKey]}; margin-bottom: 10px; font-family: 'Space Mono', monospace; text-transform: uppercase; letter-spacing: 0.15em; display: flex; align-items: center; gap: 8px;">
+            <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${PALETTES[currentPalette][typeKey]}; box-shadow: 0 0 10px ${PALETTES[currentPalette][typeKey]};"></span>
+            ${titleName}
+          </div>
+          <div style="color: var(--text-secondary); margin-bottom: 16px; font-weight: 300; font-size: 13px;">
+            ${explanation}
+          </div>
+          <div style="display: flex; justify-content: space-between; font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 500; opacity: 0.9;">
+            <span>${count.toLocaleString()} LIVE</span>
+            <span>${usdString} MOVED</span>
+          </div>
+        </div>
+      `;
+      if (typeof gsap !== 'undefined') {
+        gsap.killTweensOf(filterCountTooltip);
+        gsap.fromTo(filterCountTooltip, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4 });
+      }
+    }
+  });
+}
+
+
+function triggerArtisticSynthesis(day, dayBlocks) {
+  currentMode = 'ART_SYNTHESIS';
+  pausePlayback();
+  
+  // Use the blocks exactly as they were during playback — same data, same shape
+  if (dayBlocks && dayBlocks.length > 0) {
+    blocks = [...dayBlocks];
+  } else {
+    // Fallback: generate if no playback blocks provided
+    blocks = generateMockHistoryForDate('2026-07-' + (day < 10 ? '0'+day : String(day))).slice(0, maxTiles);
+  }
+  
+  let counts = { 'Plain Transfer': 0, 'Token Swap': 0, 'NFT Mint': 0, 'Smart Contract': 0 };
+  blocks.forEach(b => {
+    getBlockTransactions(b).forEach(t => {
+      counts[t.type] = (counts[t.type] || 0) + 1;
+    });
+  });
+  let dominantType = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+  
+  const weatherLine = document.getElementById('cinematic-weather-line');
+  if (weatherLine) weatherLine.style.display = 'none';
+  document.getElementById('archive-drawer').classList.remove('open');
+  document.querySelector('.canvas-container').classList.remove('sidebar-open');
+  
+  // Generate the story text
+  let storyText = "A calm, balanced day on the network.";
+  if (dominantType === 'Token Swap') {
+    storyText = "The fiery orange and pink bands dominate the canvas, visualizing a day of extreme market volatility and heavy coin trading.";
+  } else if (dominantType === 'Plain Transfer') {
+    storyText = "Cool, sweeping gradients reflect a quiet day dominated by simple, peer-to-peer human payments.";
+  } else if (dominantType === 'NFT Mint') {
+    storyText = "Vivid, geometric clusters burst across the canvas, capturing a frenzy of digital art creation.";
+  }
+  
+  let artOverlay = document.getElementById('art-synthesis-overlay');
+  if (!artOverlay) {
+    artOverlay = document.createElement('div');
+    artOverlay.id = 'art-synthesis-overlay';
+    artOverlay.style.position = 'absolute';
+    artOverlay.style.bottom = '80px';
+    artOverlay.style.left = '50%';
+    artOverlay.style.transform = 'translateX(-50%)';
+    artOverlay.style.zIndex = '9000';
+    artOverlay.style.textAlign = 'center';
+    artOverlay.style.color = '#fff';
+    artOverlay.style.pointerEvents = 'none';
+    
+    artOverlay.innerHTML = `
+      <div style="font-family: 'Space Mono', monospace; font-size: 14px; letter-spacing: 0.4em; text-transform: uppercase; margin-bottom: 12px; text-shadow: 0 4px 12px rgba(0,0,0,0.5);">Synthesis Complete</div>
+      <div id="art-portrait-title" style="font-family: 'Outfit', sans-serif; font-size: 32px; font-weight: 300; letter-spacing: 0.1em; margin-bottom: 12px; text-shadow: 0 4px 12px rgba(0,0,0,0.5);">PORTRAIT OF JULY ${day}, 2026</div>
+      <div id="art-portrait-story" style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 300; color: rgba(255,255,255,0.8); max-width: 600px; margin: 0 auto 24px auto; line-height: 1.5; text-shadow: 0 2px 8px rgba(0,0,0,0.8);">${storyText}</div>
+      <button id="art-return-btn" style="pointer-events: auto; padding: 12px 30px; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.25); border-radius: 30px; font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 600; text-transform: uppercase; cursor: pointer; letter-spacing: 0.12em; backdrop-filter: blur(10px);">Return to Live Grid</button>
+    `;
+    if (typeof gsap !== 'undefined') {
+      gsap.fromTo(artOverlay, { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.8, delay: 0.3, ease: 'power3.out' });
+    }
+    document.body.appendChild(artOverlay);
+    setTimeout(() => {
+      const retBtn = document.getElementById('art-return-btn');
+      if (retBtn) {
+        retBtn.addEventListener('click', () => {
+          artOverlay.style.display = 'none';
+          if (typeof returnToLive === 'function') returnToLive();
+          else if (document.getElementById('return-live-btn')) document.getElementById('return-live-btn').click();
+        });
+      }
+    }, 100);
+  } else {
+    artOverlay.style.display = 'block';
+    document.getElementById('art-portrait-title').textContent = `PORTRAIT OF JULY ${day}, 2026`;
+    document.getElementById('art-portrait-story').textContent = storyText;
+  }
+}
+
+
+// ----------------------------------------------------
+// MICRO-INTERACTION: Magnetic Buttons
+// ----------------------------------------------------
+function initMagneticButtons() {
+  const buttons = document.querySelectorAll('header button, #archive-toggle-btn, #theme-toggle-btn');
+  buttons.forEach(btn => {
+    btn.addEventListener('mouseenter', () => {
+      if (typeof audio !== 'undefined') audio.playUIHoverTick();
+    });
+    btn.addEventListener('mousemove', (e) => {
+      const rect = btn.getBoundingClientRect();
+      // Calculate cursor position relative to button center
+      const x = (e.clientX - rect.left - rect.width / 2) * 0.4;
+      const y = (e.clientY - rect.top - rect.height / 2) * 0.4;
+      
+      if (typeof gsap !== 'undefined') {
+        gsap.to(btn, { x: x, y: y, duration: 0.3, ease: 'power2.out' });
+      } else {
+        btn.style.transform = `translate(${x}px, ${y}px)`;
+      }
+    });
+    
+    btn.addEventListener('mouseleave', () => {
+      if (typeof gsap !== 'undefined') {
+        gsap.to(btn, { x: 0, y: 0, duration: 0.7, ease: 'elastic.out(1, 0.3)' });
+      } else {
+        btn.style.transform = `translate(0px, 0px)`;
+      }
+    });
+  });
+}
+
+// Ensure it runs after DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initMagneticButtons);
+} else {
+  initMagneticButtons();
+}
+
+// ----------------------------------------------------
+// MICRO-INTERACTION: Custom Cursor (High Performance GSAP)
+// ----------------------------------------------------
+function initCustomCursor() {
+  const cursor = document.createElement('div');
+  cursor.id = 'custom-cursor';
+  document.body.appendChild(cursor);
+
+  // Use GSAP quickSetter for buttery smooth 120fps hardware acceleration
+  const xSetter = gsap.quickSetter(cursor, "x", "px");
+  const ySetter = gsap.quickSetter(cursor, "y", "px");
+
+  window.addEventListener('mousemove', (e) => {
+    xSetter(e.clientX);
+    ySetter(e.clientY);
+    
+    // Debounce/Throttle the elementFromPoint check slightly for performance
+    if (e.clientX % 2 === 0) {
+        const hoveredEl = document.elementFromPoint(e.clientX, e.clientY);
+        if (hoveredEl && (
+          hoveredEl.tagName === 'BUTTON' || 
+          hoveredEl.tagName === 'A' || 
+          hoveredEl.tagName === 'SELECT' ||
+          hoveredEl.closest('button') ||
+          (hoveredEl.id === 'mosaic-canvas' && hoveredBlock !== null)
+        )) {
+          cursor.classList.add('hovering');
+        } else {
+          cursor.classList.remove('hovering');
+        }
+    }
+  });
+  
+  document.addEventListener('mouseleave', () => gsap.to(cursor, {opacity: 0, duration: 0.2}));
+  document.addEventListener('mouseenter', () => gsap.to(cursor, {opacity: 1, duration: 0.2}));
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initCustomCursor);
+} else {
+  initCustomCursor();
+}
+
+// EXPOSE TO WINDOW FOR WEBXR
+window.THEMES = THEMES;
+window.currentTheme = currentTheme;
+window.currentPalette = currentPalette;
