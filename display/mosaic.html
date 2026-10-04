@@ -38,7 +38,13 @@
     </div>
     
     <!-- Wallet Tracker and Stats Banner -->
-    <div class="header-controls">
+    
+      <div class="stat-item" style="border-right: none; margin-right: 0;">
+        <span class="label">GAS TREND</span>
+        <canvas id="gas-sparkline" width="80" height="24" style="margin-top: 4px; display: block; filter: drop-shadow(0 0 4px rgba(0,255,136,0.3));"></canvas>
+      </div>
+
+      <div class="header-controls">
       <div class="tracker-bar">
         <input type="text" id="track-address-input" placeholder="Track wallet (e.g. 0x71c...)" aria-label="Track Wallet Address">
         <button id="clear-track-btn" aria-label="Clear tracked wallet">&times;</button>

@@ -735,6 +735,7 @@ function applyAllSettings() {
 
   // 3. Legend and ratio bar
   updateRatioBarColors();
+  updateGasSparkline();
 
   // 4. Update URL so sharing works
   updateUrlParameters();
@@ -1227,16 +1228,27 @@ function draw(timestamp) {
   }
 
   if (blocks.length === 0 && currentMode === 'LIVE') {
-    ctx.fillStyle = theme.tileBg;
-    for (let c = 0; c < cols; c++) {
-      for (let r = 0; r < rows; r++) {
-        ctx.fillRect(c * tileSize, r * tileSize, tileSize - gutter, tileSize - gutter);
-        ctx.fillStyle = theme.text === '#222220' ? 'rgba(0, 0, 0, 0.02)' : 'rgba(255, 255, 255, 0.02)';
-        ctx.strokeStyle = theme.gridLine;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(c * tileSize, r * tileSize, tileSize - gutter, tileSize - gutter);
-      }
+    // PERFORMANCE OPTIMIZATION: Pre-rendered Grid Cache
+    if (!window.gridCacheCanvas || window.gridCacheCanvas.width !== canvas.width || window.gridCacheCanvas.height !== canvas.height || window.lastGridTheme !== currentTheme) {
+        window.gridCacheCanvas = document.createElement('canvas');
+        window.gridCacheCanvas.width = canvas.width;
+        window.gridCacheCanvas.height = canvas.height;
+        const cCtx = window.gridCacheCanvas.getContext('2d');
+        cCtx.fillStyle = theme.tileBg;
+        for (let c = 0; c < cols; c++) {
+            for (let r = 0; r < rows; r++) {
+                cCtx.fillStyle = theme.tileBg;
+                cCtx.fillRect(c * tileSize, r * tileSize, tileSize - gutter, tileSize - gutter);
+                cCtx.fillStyle = theme.text === '#222220' ? 'rgba(0, 0, 0, 0.02)' : 'rgba(255, 255, 255, 0.02)';
+                cCtx.strokeStyle = theme.gridLine;
+                cCtx.lineWidth = 1;
+                cCtx.strokeRect(c * tileSize, r * tileSize, tileSize - gutter, tileSize - gutter);
+            }
+        }
+        window.lastGridTheme = currentTheme;
     }
+    // Draw the entire 4000-cell grid in a single lightning-fast GPU operation!
+    ctx.drawImage(window.gridCacheCanvas, 0, 0);
 
     ctx.fillStyle = theme.text;
     ctx.font = '500 13px Outfit';
@@ -1583,6 +1595,39 @@ function calculateDailyTrends() {
   }
   
   updateRatioBarColors();
+  updateGasSparkline();
+}
+
+
+// ----------------------------------------------------
+// PERFORMANCE & UX: Gas Sparkline Renderer
+// ----------------------------------------------------
+function updateGasSparkline() {
+  const c = document.getElementById('gas-sparkline');
+  if (!c || blocks.length === 0) return;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  
+  const recent = blocks.slice(-30);
+  if (recent.length < 2) return;
+  
+  const maxGas = Math.max(...recent.map(b => b.base_fee_gwei));
+  const minGas = Math.min(...recent.map(b => b.base_fee_gwei));
+  const range = maxGas - minGas || 1;
+  
+  ctx.beginPath();
+  recent.forEach((b, i) => {
+    const x = (i / (recent.length - 1)) * c.width;
+    const y = c.height - ((b.base_fee_gwei - minGas) / range) * c.height;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  
+  ctx.strokeStyle = '#00ff88';
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.stroke();
 }
 
 function updateStats() {
@@ -2131,6 +2176,20 @@ function tickPlayback() {
     audio.playBlockTones(blocks[blocks.length - 1]);
   }
   
+  
+  // Trigger animation ripple on playback tick
+  if (blocks.length > 0 && typeof gsap !== 'undefined') {
+      const lastIdx = blocks.length - 1;
+      rippleOriginCol = lastIdx % cols;
+      rippleOriginRow = Math.floor(lastIdx / cols);
+      rippleProgress.value = 0;
+      gsap.killTweensOf(rippleProgress);
+      gsap.to(rippleProgress, {
+          value: 1.0, duration: 1.0, ease: 'power2.out',
+          onComplete: () => { rippleOriginCol = -1; rippleOriginRow = -1; rippleProgress.value = 0; }
+      });
+  }
+
   playbackCounter.textContent = `${playbackIndex} / ${playbackFullList.length} Blocks`;
 }
 
@@ -2179,6 +2238,20 @@ playbackSlider.addEventListener('input', (e) => {
   playbackIndex = parseInt(e.target.value);
   blocks = playbackFullList.slice(0, playbackIndex);
   updateStats();
+  
+  // Trigger animation ripple on playback tick
+  if (blocks.length > 0 && typeof gsap !== 'undefined') {
+      const lastIdx = blocks.length - 1;
+      rippleOriginCol = lastIdx % cols;
+      rippleOriginRow = Math.floor(lastIdx / cols);
+      rippleProgress.value = 0;
+      gsap.killTweensOf(rippleProgress);
+      gsap.to(rippleProgress, {
+          value: 1.0, duration: 1.0, ease: 'power2.out',
+          onComplete: () => { rippleOriginCol = -1; rippleOriginRow = -1; rippleProgress.value = 0; }
+      });
+  }
+
   playbackCounter.textContent = `${playbackIndex} / ${playbackFullList.length} Blocks`;
   lastInteractionTime = Date.now();
 });
@@ -2288,6 +2361,20 @@ async function loadHistoricalPortrait(dateStr, dayNum) {
   
   playbackSlider.max = playbackFullList.length;
   playbackSlider.value = 0;
+  
+  // Trigger animation ripple on playback tick
+  if (blocks.length > 0 && typeof gsap !== 'undefined') {
+      const lastIdx = blocks.length - 1;
+      rippleOriginCol = lastIdx % cols;
+      rippleOriginRow = Math.floor(lastIdx / cols);
+      rippleProgress.value = 0;
+      gsap.killTweensOf(rippleProgress);
+      gsap.to(rippleProgress, {
+          value: 1.0, duration: 1.0, ease: 'power2.out',
+          onComplete: () => { rippleOriginCol = -1; rippleOriginRow = -1; rippleProgress.value = 0; }
+      });
+  }
+
   playbackCounter.textContent = `0 / ${playbackFullList.length} Blocks`;
   playbackPlayBtn.textContent = 'Play';
   playbackControls.classList.add('active');
@@ -2611,6 +2698,7 @@ requestAnimationFrame(draw);
 updateStats();
 applyThemeStyles();
 updateRatioBarColors();
+  updateGasSparkline();
 updateLegend();
 triggerGsapEntrances();
 
