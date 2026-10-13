@@ -45,7 +45,44 @@
       </div>
 
       <div class="header-controls">
-      <div class="tracker-bar">
+      <!-- Live Chain Selector Pill -->
+      <div class="chain-selector-pill" style="display: flex; align-items: center; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; margin-right: 8px; transition: border-color 0.2s;">
+        <span style="font-size: 11px; margin-right: 6px;">🌐</span>
+        <select id="header-chain-select" style="background: transparent; border: none; color: #00ff88; font-family: 'Space Mono', monospace; font-size: 10px; font-weight: bold; text-transform: uppercase; cursor: pointer; outline: none; letter-spacing: 0.05em;">
+          <option value="ethereum" style="background: #0d0f14; color: #00ff88;">Ethereum Mainnet (Live)</option>
+          <option value="base" style="background: #0d0f14; color: #00ff88;">Base L2 (Live)</option>
+          <option value="arbitrum" style="background: #0d0f14; color: #00ff88;">Arbitrum One (Live)</option>
+          <option value="solana" style="background: #0d0f14; color: #00ff88;">Solana Mainnet (Live)</option>
+        </select>
+      </div>
+
+      <!-- Wallet Tracker with Presets -->
+      <div class="tracker-container" style="position: relative; display: flex; align-items: center;">
+        <div class="tracker-bar">
+          <input type="text" id="track-address-input" placeholder="Track wallet (e.g. 0x71c...)" aria-label="Track Wallet Address">
+          <button id="presets-toggle-btn" title="Choose test wallet" style="background:transparent; border:none; color:#00ff88; font-size:9px; cursor:pointer; font-family:'Space Mono',monospace; padding:0 4px; text-transform:uppercase; letter-spacing:0.05em; font-weight:600;">PRESETS▾</button>
+          <button id="clear-track-btn" aria-label="Clear tracked wallet">&times;</button>
+        </div>
+        <div id="wallet-presets-dropdown" style="display:none; position:absolute; top:calc(100% + 8px); left:0; width:300px; background:rgba(8,10,14,0.98); border:1px solid rgba(0,255,136,0.3); border-radius:6px; padding:10px; z-index:1000; box-shadow:0 12px 36px rgba(0,0,0,0.85); backdrop-filter:blur(20px);">
+          <div style="font-family:'Space Mono',monospace; font-size:9px; text-transform:uppercase; letter-spacing:0.12em; color:rgba(255,255,255,0.45); margin-bottom:8px;">1-Click Test Wallets</div>
+          <div class="preset-chip" data-addr="0xd8da6bf26964af9d7eed9e03e53415d37aa96045" style="cursor:pointer; padding:6px 8px; border-radius:4px; margin-bottom:4px; background:rgba(255,255,255,0.04); display:flex; justify-content:space-between; align-items:center; font-family:'Outfit',sans-serif; font-size:12px; transition:background 0.2s;">
+            <span style="color:#00ff88; font-weight:500;">🦄 Vitalik Buterin (vitalik.eth)</span>
+            <span style="font-family:'Space Mono',monospace; font-size:9px; opacity:0.4;">0xd8da...045</span>
+          </div>
+          <div class="preset-chip" data-addr="0x28c6c06298d514db089934071355e5743bf21d60" style="cursor:pointer; padding:6px 8px; border-radius:4px; margin-bottom:4px; background:rgba(255,255,255,0.04); display:flex; justify-content:space-between; align-items:center; font-family:'Outfit',sans-serif; font-size:12px; transition:background 0.2s;">
+            <span style="color:#ffb703; font-weight:500;">🏦 Binance Hot Wallet</span>
+            <span style="font-family:'Space Mono',monospace; font-size:9px; opacity:0.4;">0x28c6...d60</span>
+          </div>
+          <div class="preset-chip" data-addr="0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45" style="cursor:pointer; padding:6px 8px; border-radius:4px; margin-bottom:4px; background:rgba(255,255,255,0.04); display:flex; justify-content:space-between; align-items:center; font-family:'Outfit',sans-serif; font-size:12px; transition:background 0.2s;">
+            <span style="color:#ff007a; font-weight:500;">🔄 Uniswap V3 Router</span>
+            <span style="font-family:'Space Mono',monospace; font-size:9px; opacity:0.4;">0x68b3...c45</span>
+          </div>
+          <div class="preset-chip" data-addr="0x5754284f345afc66a98fbb0a0afe71e0f007b949" style="cursor:pointer; padding:6px 8px; border-radius:4px; background:rgba(255,255,255,0.04); display:flex; justify-content:space-between; align-items:center; font-family:'Outfit',sans-serif; font-size:12px; transition:background 0.2s;">
+            <span style="color:#00e5ff; font-weight:500;">🐋 Tether Treasury Whale</span>
+            <span style="font-family:'Space Mono',monospace; font-size:9px; opacity:0.4;">0x5754...949</span>
+          </div>
+        </div>
+      </div>
         <input type="text" id="track-address-input" placeholder="Track wallet (e.g. 0x71c...)" aria-label="Track Wallet Address">
         <button id="clear-track-btn" aria-label="Clear tracked wallet">&times;</button>
       </div>
@@ -106,7 +143,7 @@
     <canvas id="mosaic-canvas"></canvas>
 
   <!-- Massive Minimalistic Dashboard Stats -->
-  <div id="cinematic-weather-line" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 5; font-family: 'Outfit', sans-serif; font-weight: 300; color: #ffffff; text-align: center; letter-spacing: 0.05em; width: 100vw; padding: 40px 20px; box-sizing: border-box; line-height: 1.6; text-shadow: 0 2px 10px rgba(0,0,0,0.9), 0 8px 30px rgba(0,0,0,0.9); pointer-events: none; background: radial-gradient(circle, rgba(10,12,16,0.7) 0%, rgba(10,12,16,0) 60%);">
+  <div id="cinematic-weather-line" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 5; font-family: 'Outfit', sans-serif; font-weight: 300; color: #ffffff; text-align: center; letter-spacing: 0.05em; width: 100vw; padding: 40px 20px; box-sizing: border-box; line-height: 1.6; text-shadow: 0 2px 10px rgba(0,0,0,0.9), 0 8px 30px rgba(0,0,0,0.9); pointer-events: none; background: radial-gradient(circle, rgba(10,12,16,0.7) 0%, rgba(10,12,16,0) 60%); transition: opacity 0.4s ease;">
   <!-- JS will inject the poetic summary here -->
 </div>
 
@@ -394,10 +431,11 @@
 
   <footer class="app-footer">
     <div class="legend" id="legend-container">
-      <span class="legend-item"><span class="color-dot cool"></span> Low Fees</span>
-      <span class="legend-item"><span class="color-dot hot"></span> High Fees</span>
-      <span class="legend-item"><span class="color-dot neon-whale"></span> Whale Transaction</span>
-      <span class="legend-item"><span class="color-dot dot-tracked"></span> Tracked Transaction</span>
+      <span class="legend-item" data-type="Plain Transfer" title="Click to filter Direct Payments"><span class="color-dot" style="background-color: var(--color-transfer, #3b82f6);"></span> Direct Payments</span>
+      <span class="legend-item" data-type="Token Swap" title="Click to filter Token Swaps"><span class="color-dot" style="background-color: var(--color-swap, #ec4899);"></span> Trading Coins</span>
+      <span class="legend-item" data-type="NFT Mint" title="Click to filter Digital Art / NFTs"><span class="color-dot" style="background-color: var(--color-mint, #a855f7);"></span> Digital Art</span>
+      <span class="legend-item" data-type="Whale" title="Click to highlight Whale blocks" style="cursor:pointer;"><span class="color-dot neon-whale" style="background-color: #ffffff; box-shadow: 0 0 8px #ffffff;"></span> Whale Transaction</span>
+      <span class="legend-item" data-type="Tracked" title="Click to highlight Tracked Wallet activity" style="cursor:pointer;"><span class="color-dot dot-tracked" style="background-color: transparent; border: 2px solid rgba(0, 229, 255, 0.85); box-shadow: 0 0 6px rgba(0, 229, 255, 0.6);"></span> Tracked Wallet</span>
     </div>
     <div class="guide-text">Hover to inspect. Tap for receipts.</div>
   </footer>

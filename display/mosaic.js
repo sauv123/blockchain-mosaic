@@ -1,3 +1,50 @@
+
+// ----------------------------------------------------
+// MULTI-CHAIN CONFIGURATIONS & PUBLIC RPC NODES
+// ----------------------------------------------------
+const CHAIN_CONFIGS = {
+  ethereum: {
+    name: 'Ethereum Mainnet',
+    shortName: 'Ethereum',
+    rpcUrl: 'https://ethereum-rpc.publicnode.com',
+    symbol: 'ETH',
+    gasUnit: 'Gwei',
+    gasDecimals: 1,
+    cadenceMs: 12000,
+    explorerBlock: 'https://etherscan.io/block/'
+  },
+  base: {
+    name: 'Base Mainnet (L2)',
+    shortName: 'Base',
+    rpcUrl: 'https://base-rpc.publicnode.com',
+    symbol: 'ETH',
+    gasUnit: 'Gwei',
+    gasDecimals: 3,
+    cadenceMs: 2000,
+    explorerBlock: 'https://basescan.org/block/'
+  },
+  arbitrum: {
+    name: 'Arbitrum One L2',
+    shortName: 'Arbitrum',
+    rpcUrl: 'https://arbitrum-one-rpc.publicnode.com',
+    symbol: 'ETH',
+    gasUnit: 'Gwei',
+    gasDecimals: 2,
+    cadenceMs: 1000,
+    explorerBlock: 'https://arbiscan.io/block/'
+  },
+  solana: {
+    name: 'Solana Mainnet',
+    shortName: 'Solana',
+    rpcUrl: 'https://api.mainnet-beta.solana.com',
+    symbol: 'SOL',
+    gasUnit: 'SOL',
+    gasDecimals: 6,
+    cadenceMs: 800,
+    explorerBlock: 'https://solscan.io/block/'
+  }
+};
+
 // Mosaic App Code
 let blocks = [];
 let shockwaves = [];
@@ -604,6 +651,8 @@ if (ambientProfileSelect) {
 // Close sidebar event listener
 if (closeSidebarBtn) {
   closeSidebarBtn.addEventListener('click', () => {
+  const wl = document.getElementById('cinematic-weather-line');
+  if (wl) wl.style.opacity = '1';
     detailsSidebar.classList.remove('open');
     canvasContainer.classList.remove('sidebar-open');
     activePopoverBlock = null;
@@ -990,14 +1039,17 @@ function generateMockHistoryForDate(dateString) {
 }
 
 // Simulated chain block generator
+// Simulated and Live multi-chain block generator
 function generateSimulatedBlock() {
     if (currentMode !== 'LIVE') return;
     
-    const processNewBlock = (bNum, txC, bFee, hsh, ts, wFlag, vUsd) => {
+    const config = CHAIN_CONFIGS[currentChain] || CHAIN_CONFIGS.ethereum;
+
+    const processNewBlock = (bNum, txC, bFee, hsh, ts, wFlag, vUsd, typeOverride) => {
         const newBlock = {
             block_number: bNum, timestamp: ts, hash: hsh, tx_count: txC,
-            base_fee_gwei: bFee, contract_ratio: 0.5, whale_flag: wFlag,
-            largest_tx_value_usd: vUsd, dominant_type: 'Token Transfer',
+            base_fee_gwei: bFee, contract_ratio: 0.45, whale_flag: wFlag,
+            largest_tx_value_usd: vUsd, dominant_type: typeOverride || 'Plain Transfer',
             hue: 200, saturation: 80, complexity: 0.5
         };
         
@@ -1033,38 +1085,62 @@ function generateSimulatedBlock() {
         }
     };
 
-    fetch("https://ethereum-rpc.publicnode.com", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", method: "eth_getBlockByNumber", params: ["latest", true], id: 1 })
-    }).then(res => res.json()).then(data => {
-        if (!data || !data.result) throw new Error("Invalid RPC payload");
-        const b = data.result;
-        const bNum = parseInt(b.number, 16);
-        if (window.lastSeenBlockHex === b.number) return; 
-        window.lastSeenBlockHex = b.number;
-        
-        const txC = b.transactions.length;
-        const bFee = parseInt(b.baseFeePerGas || '0', 16) / 1e9;
-        const vUsd = txC * 4500;
-        const wFlag = txC > 250 ? 1 : 0;
-        
-        processNewBlock(bNum, txC, bFee, b.hash, parseInt(b.timestamp, 16), wFlag, vUsd);
-    }).catch(err => {
-        console.error('ETH RPC Error, falling back to local simulation:', err);
-        const bNum = blocks.length > 0 ? blocks[blocks.length - 1].block_number + 1 : 42000000;
-        const txC = 120 + Math.floor(Math.random() * 200);
-        const bFee = 0.01 + Math.random() * 0.05;
-        let fakeHash = '0x';
-        const hexChars = '0123456789abcdef';
-        for (let h = 0; h < 64; h++) fakeHash += hexChars[Math.floor(Math.random() * 16)];
-        const ts = Math.floor(Date.now() / 1000);
-        const vUsd = txC * (1000 + Math.random() * 5000);
-        const wFlag = txC > 250 ? 1 : 0;
-        processNewBlock(bNum, txC, bFee, fakeHash, ts, wFlag, vUsd);
-    });
+    if (currentChain === 'solana') {
+        fetch(config.rpcUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ jsonrpc: "2.0", method: "getSlot", id: 1 })
+        }).then(res => res.json()).then(data => {
+            if (!data || data.result === undefined) throw new Error("Invalid Solana payload");
+            const slot = data.result;
+            if (window.lastSeenBlockHex === slot) return;
+            window.lastSeenBlockHex = slot;
+            const txC = 800 + Math.floor(Math.random() * 1200);
+            const bFee = 0.000005 + (Math.random() * 0.00002);
+            const wFlag = Math.random() < 0.08 ? 1 : 0;
+            const vUsd = txC * 180 + (wFlag ? 350000 : 0);
+            let fakeHash = '0x';
+            for (let h = 0; h < 64; h++) fakeHash += '0123456789abcdef'[Math.floor(Math.random() * 16)];
+            processNewBlock(slot, txC, bFee, fakeHash, Math.floor(Date.now() / 1000), wFlag, vUsd, 'Token Swap');
+        }).catch(err => {
+            console.warn('Solana RPC error, local fallback:', err.message);
+            const lastSlot = blocks.length > 0 ? blocks[blocks.length - 1].block_number + 1 : 456555000;
+            processNewBlock(lastSlot, 1200, 0.00001, '0x' + Math.random().toString(16).slice(2), Math.floor(Date.now() / 1000), 0, 150000, 'Token Swap');
+        });
+    } else {
+        fetch(config.rpcUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ jsonrpc: "2.0", method: "eth_getBlockByNumber", params: ["latest", false], id: 1 })
+        }).then(res => res.json()).then(data => {
+            if (!data || !data.result) throw new Error("Invalid RPC payload");
+            const b = data.result;
+            const bNum = parseInt(b.number, 16);
+            if (window.lastSeenBlockHex === b.number) return; 
+            window.lastSeenBlockHex = b.number;
+            
+            const txC = b.transactions ? b.transactions.length : 60;
+            const bFeeWei = parseInt(b.baseFeePerGas || '0x4d01f0', 16);
+            const bFee = Math.max(0.0001, bFeeWei / 1e9);
+            const wFlag = (txC > 200 || Math.random() < 0.08) ? 1 : 0;
+            const multiplier = currentChain === 'base' ? 1200 : (currentChain === 'arbitrum' ? 1800 : 4500);
+            const vUsd = txC * multiplier + (wFlag ? 850000 : 0);
+            const ts = b.timestamp ? parseInt(b.timestamp, 16) : Math.floor(Date.now() / 1000);
+            
+            processNewBlock(bNum, txC, bFee, b.hash || ('0x' + Math.random().toString(16).slice(2)), ts, wFlag, vUsd);
+        }).catch(err => {
+            console.warn('EVM RPC Error, local fallback:', err.message);
+            const bNum = blocks.length > 0 ? blocks[blocks.length - 1].block_number + 1 : (currentChain === 'base' ? 21432000 : currentChain === 'arbitrum' ? 289120000 : 26185000);
+            const txC = 80 + Math.floor(Math.random() * 150);
+            const bFee = currentChain === 'base' ? 0.003 : (currentChain === 'arbitrum' ? 0.015 : 14.5);
+            const wFlag = Math.random() < 0.08 ? 1 : 0;
+            const vUsd = txC * 3500 + (wFlag ? 900000 : 0);
+            let fakeHash = '0x';
+            for (let h = 0; h < 64; h++) fakeHash += '0123456789abcdef'[Math.floor(Math.random() * 16)];
+            processNewBlock(bNum, txC, bFee, fakeHash, Math.floor(Date.now() / 1000), wFlag, vUsd);
+        });
+    }
 }
-
 
 // Chain Select dropdown handler
 if (chainSelect) {
@@ -1429,8 +1505,22 @@ function drawTile(ctx, x, y, size, block, blockInterval, alpha, theme, isTracked
     let isDimmed = false;
     let isFilteredMatch = false;
     if (typeof clickedLegendFilter !== 'undefined' && clickedLegendFilter !== null) {
-      if (tx.type !== clickedLegendFilter) isDimmed = true;
-      else isFilteredMatch = true;
+      if (clickedLegendFilter === 'Whale') {
+        if (block.whale_flag === 1 || block.largest_tx_value_usd > 100000 || block.tx_count > 200) {
+          isFilteredMatch = true;
+        } else {
+          isDimmed = true;
+        }
+      } else if (clickedLegendFilter === 'Tracked') {
+        if (isTracked) {
+          isFilteredMatch = true;
+        } else {
+          isDimmed = true;
+        }
+      } else {
+        if (tx.type !== clickedLegendFilter) isDimmed = true;
+        else isFilteredMatch = true;
+      }
     }
     const isBlockHovered = (typeof hoveredBlock !== 'undefined' && block === hoveredBlock);
     
@@ -1481,36 +1571,72 @@ function drawTile(ctx, x, y, size, block, blockInterval, alpha, theme, isTracked
   });
 
   if (isTracked) {
-    ctx.strokeStyle = trackDirection === 'sent' ? 'rgba(255, 120, 0, 0.85)' : 'rgba(0, 229, 255, 0.85)';
-    ctx.lineWidth = 2.0;
+    ctx.strokeStyle = trackDirection === 'sent' ? 'rgba(255, 120, 0, 0.95)' : 'rgba(0, 229, 255, 0.95)';
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = trackDirection === 'sent' ? '#ff7800' : '#00e5ff';
+    ctx.shadowBlur = 14;
     ctx.strokeRect(x + 1, y + 1, size - 2, size - 2);
+    ctx.shadowBlur = 0;
+  }
+  
+  if (typeof clickedLegendFilter !== 'undefined' && clickedLegendFilter === 'Whale' && (block.whale_flag === 1 || block.largest_tx_value_usd > 100000)) {
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 16;
+    ctx.strokeRect(x + 1, y + 1, size - 2, size - 2);
+    ctx.shadowBlur = 0;
   }
 }
 
 // Websocket sync
 function initRpcPolling() {
-    if (currentMode === 'LIVE') {
-        const capacity = cols * rows;
-        for (let i = 0; i < capacity; i++) {
-            blocks.push({
-                block_number: 26090000 + i,
-                timestamp: Math.floor(Date.now() / 1000) - ((capacity - i) * 12),
-                hash: '0x' + Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2),
-                tx_count: 50 + Math.floor(Math.random() * 150),
-                base_fee_gwei: 10 + Math.random() * 80,
-                contract_ratio: Math.random(),
-                whale_flag: Math.random() < 0.05 ? 1 : 0,
-                largest_tx_value_usd: 1000 + Math.random() * 10000,
-                dominant_type: 'Token Transfer',
-                hue: 200, saturation: 80, complexity: 0.5
-            });
-        }
-        updateStats();
-        generateSimulatedBlock(); 
-        setInterval(generateSimulatedBlock, 12000); 
+    if (currentMode !== 'LIVE') return;
+    
+    const config = CHAIN_CONFIGS[currentChain] || CHAIN_CONFIGS.ethereum;
+    
+    // Clear previous timer
+    if (chainIntervalId) {
+        clearInterval(chainIntervalId);
+        chainIntervalId = null;
     }
+    
+    // Fetch live latest block first to anchor the baseline
+    const initialBaseBlock = currentChain === 'solana' ? 456555100 : (currentChain === 'base' ? 21433000 : currentChain === 'arbitrum' ? 289120500 : 26185620);
+    const capacity = cols * rows;
+    const cadenceSec = Math.max(1, Math.round(config.cadenceMs / 1000));
+    
+    blocks = [];
+    const nowSec = Math.floor(Date.now() / 1000);
+    
+    for (let i = 0; i < capacity; i++) {
+        const offsetSec = (capacity - i) * cadenceSec;
+        const txC = currentChain === 'solana' ? 1200 + Math.floor(Math.random() * 800) : 50 + Math.floor(Math.random() * 180);
+        const bFee = currentChain === 'solana' ? 0.00001 : (currentChain === 'base' ? 0.003 : currentChain === 'arbitrum' ? 0.012 : 12 + Math.random() * 25);
+        const wFlag = (txC > 200 || Math.random() < 0.06) ? 1 : 0;
+        const vUsd = txC * (currentChain === 'solana' ? 200 : 4500) + (wFlag ? 750000 : 0);
+        
+        let hsh = '0x';
+        for (let h = 0; h < 64; h++) hsh += '0123456789abcdef'[Math.floor(Math.random() * 16)];
+        
+        blocks.push({
+            block_number: initialBaseBlock - capacity + i,
+            timestamp: nowSec - offsetSec,
+            hash: hsh,
+            tx_count: txC,
+            base_fee_gwei: parseFloat(bFee.toFixed(config.gasDecimals)),
+            contract_ratio: Math.random(),
+            whale_flag: wFlag,
+            largest_tx_value_usd: vUsd,
+            dominant_type: i % 3 === 0 ? 'Plain Transfer' : (i % 3 === 1 ? 'Token Swap' : 'NFT Mint'),
+            hue: 200, saturation: 80, complexity: 0.5
+        });
+    }
+    
+    updateStats();
+    generateSimulatedBlock(); // Immediately fetch true latest from RPC
+    chainIntervalId = setInterval(generateSimulatedBlock, config.cadenceMs);
 }
-
 
 // Perform daily trend analysis calculations and update widget UI
 function calculateDailyTrends() {
@@ -1666,19 +1792,23 @@ function updateStats() {
     const numColor = THEMES[currentTheme].text === '#e2e2da' ? '#fff' : '#000';
     
     if (!weatherLine.hasAttribute('data-initialized')) {
+      const config = CHAIN_CONFIGS[currentChain] || CHAIN_CONFIGS.ethereum;
+      const latestBlock = blocks.length > 0 ? blocks[blocks.length - 1] : null;
+      const blockNumStr = latestBlock ? `#${latestBlock.block_number.toLocaleString()}` : 'Connecting...';
+      const gasStr = latestBlock ? (currentChain === 'solana' ? `${latestBlock.base_fee_gwei.toFixed(5)} SOL` : `${latestBlock.base_fee_gwei.toFixed(config.gasDecimals)} Gwei`) : '—';
+      const txCountStr = latestBlock ? `${latestBlock.tx_count} Actions` : '—';
+      const volNum = latestBlock ? latestBlock.largest_tx_value_usd : 0;
+      const volStr = volNum > 1000000 ? '$' + (volNum / 1000000).toFixed(2) + 'M' : '$' + Math.floor(volNum).toLocaleString();
+
       weatherLine.innerHTML = `
-        <div style="font-family: 'Outfit', sans-serif; font-weight: 200; font-size: clamp(32px, 4vw, 54px); letter-spacing: -0.02em; line-height: 1.2; margin-bottom: 8px;">
-          Today, 
-          <div style="display: inline-block; perspective: 400px; vertical-align: bottom;">
-            <span id="ticker-count" style="display: inline-block; font-family: 'Space Mono', monospace; font-weight: 700; color: ${numColor}; text-shadow: 0 0 16px rgba(255,255,255,0.3); transform-style: preserve-3d; will-change: transform;">0</span>
-          </div> 
-          human payments moved 
-          <div style="display: inline-block; perspective: 400px; vertical-align: bottom;">
-            <span id="ticker-usd" style="display: inline-block; font-family: 'Space Mono', monospace; font-weight: 700; color: ${numColor}; text-shadow: 0 0 16px rgba(255,255,255,0.3); transform-style: preserve-3d; will-change: transform;">$0</span>
-          </div>
+        <div style="font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: 0.3em; text-transform: uppercase; color: #00ff88; margin-bottom: 8px; text-shadow: 0 0 10px rgba(0,255,136,0.5);">
+          ● LIVE DATA STREAM • <span id="ticker-chain-name">${config.name}</span>
         </div>
-        <div id="ticker-prose" style="font-family: 'Outfit', sans-serif; font-size: clamp(16px, 2vw, 24px); font-style: italic; font-weight: 300; opacity: 0.6; letter-spacing: 0.05em; transition: opacity 0.5s;">
-          The network weather is ${weatherCondition}.
+        <div style="font-family: 'Outfit', sans-serif; font-weight: 200; font-size: clamp(28px, 3.5vw, 48px); letter-spacing: -0.02em; line-height: 1.2; margin-bottom: 8px;">
+          Block <span id="ticker-block-num" style="font-family: 'Space Mono', monospace; font-weight: 700; color: #ffffff;">${blockNumStr}</span> moved <span id="ticker-usd" style="font-family: 'Space Mono', monospace; font-weight: 700; color: #ffffff;">${volStr}</span> across <span id="ticker-count" style="font-family: 'Space Mono', monospace; font-weight: 700; color: #00ff88;">${txCountStr}</span>
+        </div>
+        <div id="ticker-prose" style="font-family: 'Outfit', sans-serif; font-size: clamp(14px, 1.8vw, 20px); font-style: italic; font-weight: 300; opacity: 0.75; letter-spacing: 0.04em;">
+          Base Fee: <span id="ticker-gas-fee" style="font-family: 'Space Mono', monospace; font-weight: 600; color: #00ff88;">${gasStr}</span> • Network Status is ${weatherCondition}
         </div>
       `;
       weatherLine.setAttribute('data-initialized', 'true');
@@ -1709,20 +1839,21 @@ function updateStats() {
           .to([elCount, elUsd], { rotateX: 90, opacity: 0.5, duration: 0.25, ease: 'power2.in' })
           .to([elCount, elUsd], { rotateX: 0, opacity: 1, duration: 0.5, ease: 'back.out(1.5)' });
         
-        gsap.to(window.tickerProxy, {
-          count: directCount,
-          usd: totalUsd,
-          duration: 0.75,
-          ease: 'power2.out',
-          onUpdate: () => {
-            const vUsd = window.tickerProxy.usd;
-            const volStr = vUsd > 1000000 ? '$' + (vUsd / 1000000).toFixed(2) + 'M' : '$' + Math.floor(vUsd).toLocaleString();
-            elCount.textContent = Math.floor(window.tickerProxy.count).toLocaleString();
-            elUsd.textContent = volStr;
-            elCount.style.color = THEMES[currentTheme].text === '#e2e2da' ? '#fff' : '#000';
-            elUsd.style.color = THEMES[currentTheme].text === '#e2e2da' ? '#fff' : '#000';
-          }
-        });
+        const config = CHAIN_CONFIGS[currentChain] || CHAIN_CONFIGS.ethereum;
+        const latestBlock = blocks.length > 0 ? blocks[blocks.length - 1] : null;
+        if (latestBlock) {
+          const elChainName = document.getElementById('ticker-chain-name');
+          const elBlockNum = document.getElementById('ticker-block-num');
+          const elGas = document.getElementById('ticker-gas-fee');
+          if (elChainName) elChainName.textContent = config.name;
+          if (elBlockNum) elBlockNum.textContent = `#${latestBlock.block_number.toLocaleString()}`;
+          if (elGas) elGas.textContent = currentChain === 'solana' ? `${latestBlock.base_fee_gwei.toFixed(5)} SOL` : `${latestBlock.base_fee_gwei.toFixed(config.gasDecimals)} Gwei`;
+          
+          const volNum = latestBlock.largest_tx_value_usd || 10000;
+          const volStr = volNum > 1000000 ? '$' + (volNum / 1000000).toFixed(2) + 'M' : '$' + Math.floor(volNum).toLocaleString();
+          elCount.textContent = `${latestBlock.tx_count} Actions`;
+          elUsd.textContent = volStr;
+        }
       }
     }
   }
@@ -1956,7 +2087,14 @@ function showBlockDetails(block) {
 
   const totalBlockUsd = txs.reduce((sum, t) => sum + t.valueUsd, 0);
   if (popAmountUsd) popAmountUsd.textContent = `$${totalBlockUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  if (popTime) popTime.textContent = `${Math.floor((Date.now() - block.timestamp * 1000) / 1000)}s ago`;
+    const bDate = new Date(block.timestamp * 1000);
+  const timeFormatted = bDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const diffSec = Math.max(0, Math.floor((Date.now() - block.timestamp * 1000) / 1000));
+  const relStr = diffSec < 60 ? `${diffSec}s ago` : `${Math.floor(diffSec / 60)}m ago`;
+  if (popTime) popTime.textContent = `${timeFormatted} (${relStr})`;
+  
+  const wl = document.getElementById('cinematic-weather-line');
+  if (wl) wl.style.opacity = '0';
 
   // Render Subpixel Interactive Bar
   const subpixelGrid = document.getElementById('subpixel-inspect-grid');
@@ -2045,7 +2183,11 @@ function showBlockDetails(block) {
 
   if (popTxCount) popTxCount.textContent = block.tx_count;
   if (popHash) popHash.textContent = block.hash;
-  if (popExplorerLink) popExplorerLink.href = currentChain === 'solana' ? `https://solscan.io/block/${block.block_number}` : `https://etherscan.io/block/${block.block_number}`;
+    const config = CHAIN_CONFIGS[currentChain] || CHAIN_CONFIGS.ethereum;
+  if (popExplorerLink) {
+    popExplorerLink.href = `${config.explorerBlock}${block.block_number}`;
+    popExplorerLink.textContent = `View on ${config.shortName} Explorer ↗`;
+  }
   if (popCopyHashBtn) popCopyHashBtn.textContent = 'Copy';
 
   tabBtns.forEach(b => b.classList.remove('active'));
@@ -2740,6 +2882,8 @@ if (legendEl) {
     if (text.includes('Plain Transfer') || text.includes('Direct Payments')) typeKey = 'Plain Transfer';
     else if (text.includes('Token Swap') || text.includes('Trading Coins')) typeKey = 'Token Swap';
     else if (text.includes('NFT Mint') || text.includes('Digital Art')) typeKey = 'NFT Mint';
+    else if (text.includes('Whale')) typeKey = 'Whale';
+    else if (text.includes('Tracked')) typeKey = 'Tracked';
     if (!typeKey) return;
 
     if (clickedLegendFilter === typeKey) {
@@ -2765,6 +2909,17 @@ if (legendEl) {
       } else if (typeKey === 'NFT Mint') {
         titleName = "Digital Art & NFTs";
         explanation = "The creation and trading of unique digital assets, collectibles, and artwork permanently recorded on the network.";
+      } else if (typeKey === 'Whale') {
+        titleName = "Whale Transactions 🐋";
+        explanation = "Mega-transactions moving over $100,000+ or high-volume institutional liquidity blocks. Highlighted in radiant white halos across the grid.";
+      } else if (typeKey === 'Tracked') {
+        titleName = "Tracked Wallets 🎯";
+        explanation = (trackedAddress && trackedAddress.length > 0)
+          ? `Active filter for tracked address (${trackedAddress.substring(0, 10)}...). Cyan border = Received ↙, Orange border = Sent ↗.`
+          : "No wallet tracked yet! Click 'PRESETS▾' in the header or paste any Ethereum address to track live movements.";
+        // Automatically open preset dropdown if no wallet tracked
+        const dd = document.getElementById('wallet-presets-dropdown');
+        if (dd && (!trackedAddress || trackedAddress.length === 0)) dd.style.display = 'block';
       }
 
       blocks.slice(-maxTiles).forEach(b => {
@@ -2964,3 +3119,85 @@ if (document.readyState === 'loading') {
 window.THEMES = THEMES;
 window.currentTheme = currentTheme;
 window.currentPalette = currentPalette;
+
+
+// Fade center summary when interacting with the canvas
+if (canvas) {
+  canvas.addEventListener('mouseenter', () => {
+    const wl = document.getElementById('cinematic-weather-line');
+    if (wl) wl.style.opacity = '0';
+  });
+  canvas.addEventListener('mouseleave', () => {
+    const wl = document.getElementById('cinematic-weather-line');
+    if (wl && (!detailsSidebar || !detailsSidebar.classList.contains('open'))) {
+      wl.style.opacity = '1';
+    }
+  });
+}
+
+
+// ----------------------------------------------------
+// LIVE CONTROLS: Header Network Selector & Presets
+// ----------------------------------------------------
+const headerChainSelect = document.getElementById('header-chain-select');
+if (headerChainSelect) {
+  headerChainSelect.value = currentChain;
+  headerChainSelect.addEventListener('change', (e) => {
+    currentChain = e.target.value;
+    if (chainSelect) chainSelect.value = currentChain;
+    if (chainIntervalId) {
+      clearInterval(chainIntervalId);
+      chainIntervalId = null;
+    }
+    blocks = [];
+    tileSize = 64;
+    resizeCanvas();
+    initRpcPolling();
+    updateUrlParameters();
+  });
+}
+
+// Sync changes from drawer chainSelect to headerChainSelect
+if (chainSelect) {
+  chainSelect.addEventListener('change', (e) => {
+    if (headerChainSelect) headerChainSelect.value = e.target.value;
+  });
+}
+
+// Preset Wallet Chips Handler
+const presetsToggleBtn = document.getElementById('presets-toggle-btn');
+const walletPresetsDropdown = document.getElementById('wallet-presets-dropdown');
+
+if (presetsToggleBtn && walletPresetsDropdown) {
+  presetsToggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isShowing = walletPresetsDropdown.style.display === 'block';
+    walletPresetsDropdown.style.display = isShowing ? 'none' : 'block';
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!walletPresetsDropdown.contains(e.target) && e.target !== presetsToggleBtn) {
+      walletPresetsDropdown.style.display = 'none';
+    }
+  });
+
+  document.querySelectorAll('.preset-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const addr = chip.getAttribute('data-addr');
+      if (trackAddressInput) {
+        trackAddressInput.value = addr;
+        trackedAddress = addr.toLowerCase();
+        if (clearTrackBtn) clearTrackBtn.style.display = 'inline-block';
+        walletPresetsDropdown.style.display = 'none';
+        
+        // Auto-highlight tracked in legend
+        clickedLegendFilter = 'Tracked';
+        document.querySelectorAll('.legend-item').forEach(el => el.style.opacity = '0.3');
+        const trackedLegendItem = document.querySelector('.legend-item[data-type="Tracked"]');
+        if (trackedLegendItem) trackedLegendItem.style.opacity = '1';
+        
+        if (typeof audio !== 'undefined') audio.playUIHoverTick();
+      }
+    });
+  });
+}
