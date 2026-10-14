@@ -1142,7 +1142,7 @@ function generateSimulatedBlock() {
     }
 }
 
-// Chain Select dropdown handler
+// Chain Select dropdown handler in Settings drawer
 if (chainSelect) {
   chainSelect.addEventListener('change', (e) => {
     currentChain = e.target.value;
@@ -1156,17 +1156,8 @@ if (chainSelect) {
     blocks = [];
     tileSize = 64;
     resizeCanvas();
-    
-    if (currentChain === 'ethereum') {
-      switchToLive();
-    } else {
-      let cadence = 2000;
-      if (currentChain === 'arbitrum') cadence = 500;
-      else if (currentChain === 'solana') cadence = 400;
-      
-      chainIntervalId = setInterval(generateSimulatedBlock, cadence);
-      generateSimulatedBlock();
-    }
+    initRpcPolling();
+    updateUrlParameters();
   });
 }
 
@@ -2912,31 +2903,41 @@ if (legendEl) {
       } else if (typeKey === 'Whale') {
         titleName = "Whale Transactions 🐋";
         explanation = "Mega-transactions moving over $100,000+ or high-volume institutional liquidity blocks. Highlighted in radiant white halos across the grid.";
+        count = blocks.filter(b => b.whale_flag === 1 || b.largest_tx_value_usd > 100000).length;
+        totalUsd = blocks.filter(b => b.whale_flag === 1 || b.largest_tx_value_usd > 100000).reduce((sum, b) => sum + (b.largest_tx_value_usd || 0), 0);
       } else if (typeKey === 'Tracked') {
         titleName = "Tracked Wallets 🎯";
         explanation = (trackedAddress && trackedAddress.length > 0)
           ? `Active filter for tracked address (${trackedAddress.substring(0, 10)}...). Cyan border = Received ↙, Orange border = Sent ↗.`
-          : "No wallet tracked yet! Click 'PRESETS▾' in the header or paste any Ethereum address to track live movements.";
-        // Automatically open preset dropdown if no wallet tracked
-        const dd = document.getElementById('wallet-presets-dropdown');
-        if (dd && (!trackedAddress || trackedAddress.length === 0)) dd.style.display = 'block';
-      }
-
-      blocks.slice(-maxTiles).forEach(b => {
-        getBlockTransactions(b).forEach(t => {
-          if (t.type === typeKey) {
-            count++;
-            totalUsd += t.valueUsd || 0;
-          }
+          : "Type any wallet address in the search box above (e.g. 0x71c...) to track live movements!";
+        if (!trackedAddress || trackedAddress.length === 0) {
+          const inputEl = document.getElementById('track-address-input');
+          if (inputEl) inputEl.focus();
+        }
+        count = blocks.filter(b => {
+          if (!trackedAddress) return false;
+          const txs = getBlockTransactions(b);
+          return txs.some(t => t.from.includes(trackedAddress) || t.to.includes(trackedAddress));
+        }).length;
+        totalUsd = count * 3500;
+      } else {
+        blocks.slice(-maxTiles).forEach(b => {
+          getBlockTransactions(b).forEach(t => {
+            if (t.type === typeKey) {
+              count++;
+              totalUsd += t.valueUsd || 0;
+            }
+          });
         });
-      });
+      }
       
+      const badgeColor = (typeKey === 'Whale') ? '#ffffff' : (typeKey === 'Tracked' ? '#00e5ff' : (PALETTES[currentPalette][typeKey] || '#00ff88'));
       const usdString = totalUsd > 1000000 ? '$' + (totalUsd / 1000000).toFixed(1) + 'M' : '$' + totalUsd.toLocaleString(undefined, { maximumFractionDigits: 0 });
 
       filterCountTooltip.innerHTML = `
         <div style="font-family: 'Outfit', sans-serif; max-width: 280px; text-align: left; line-height: 1.6; padding: 8px 4px; color: var(--text-primary);">
-          <div style="font-size: 11px; font-weight: 600; color: ${PALETTES[currentPalette][typeKey]}; margin-bottom: 10px; font-family: 'Space Mono', monospace; text-transform: uppercase; letter-spacing: 0.15em; display: flex; align-items: center; gap: 8px;">
-            <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${PALETTES[currentPalette][typeKey]}; box-shadow: 0 0 10px ${PALETTES[currentPalette][typeKey]};"></span>
+          <div style="font-size: 11px; font-weight: 600; color: ${badgeColor}; margin-bottom: 10px; font-family: 'Space Mono', monospace; text-transform: uppercase; letter-spacing: 0.15em; display: flex; align-items: center; gap: 8px;">
+            <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${badgeColor}; box-shadow: 0 0 10px ${badgeColor};"></span>
             ${titleName}
           </div>
           <div style="color: var(--text-secondary); margin-bottom: 16px; font-weight: 300; font-size: 13px;">
@@ -3136,68 +3137,3 @@ if (canvas) {
 }
 
 
-// ----------------------------------------------------
-// LIVE CONTROLS: Header Network Selector & Presets
-// ----------------------------------------------------
-const headerChainSelect = document.getElementById('header-chain-select');
-if (headerChainSelect) {
-  headerChainSelect.value = currentChain;
-  headerChainSelect.addEventListener('change', (e) => {
-    currentChain = e.target.value;
-    if (chainSelect) chainSelect.value = currentChain;
-    if (chainIntervalId) {
-      clearInterval(chainIntervalId);
-      chainIntervalId = null;
-    }
-    blocks = [];
-    tileSize = 64;
-    resizeCanvas();
-    initRpcPolling();
-    updateUrlParameters();
-  });
-}
-
-// Sync changes from drawer chainSelect to headerChainSelect
-if (chainSelect) {
-  chainSelect.addEventListener('change', (e) => {
-    if (headerChainSelect) headerChainSelect.value = e.target.value;
-  });
-}
-
-// Preset Wallet Chips Handler
-const presetsToggleBtn = document.getElementById('presets-toggle-btn');
-const walletPresetsDropdown = document.getElementById('wallet-presets-dropdown');
-
-if (presetsToggleBtn && walletPresetsDropdown) {
-  presetsToggleBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const isShowing = walletPresetsDropdown.style.display === 'block';
-    walletPresetsDropdown.style.display = isShowing ? 'none' : 'block';
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!walletPresetsDropdown.contains(e.target) && e.target !== presetsToggleBtn) {
-      walletPresetsDropdown.style.display = 'none';
-    }
-  });
-
-  document.querySelectorAll('.preset-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-      const addr = chip.getAttribute('data-addr');
-      if (trackAddressInput) {
-        trackAddressInput.value = addr;
-        trackedAddress = addr.toLowerCase();
-        if (clearTrackBtn) clearTrackBtn.style.display = 'inline-block';
-        walletPresetsDropdown.style.display = 'none';
-        
-        // Auto-highlight tracked in legend
-        clickedLegendFilter = 'Tracked';
-        document.querySelectorAll('.legend-item').forEach(el => el.style.opacity = '0.3');
-        const trackedLegendItem = document.querySelector('.legend-item[data-type="Tracked"]');
-        if (trackedLegendItem) trackedLegendItem.style.opacity = '1';
-        
-        if (typeof audio !== 'undefined') audio.playUIHoverTick();
-      }
-    });
-  });
-}
